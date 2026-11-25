@@ -100,40 +100,34 @@ export function initModalChrome() {
 }
 
 export function updateHeaderAndGamificationUI(appState) {
-  const xp = appState.gamification.xp;
-  const lvl = getLevelInfo(xp);
-  const progressPercent = Math.min(100, Math.max(5, ((xp - lvl.min) / (lvl.next - lvl.min)) * 100));
-  const unlockedCount = appState.gamification.unlockedBadges.length;
+  const storeName = appState.storeProfile.storeName || 'Toko Kelontong Sejahtera';
+  const ownerName = appState.storeProfile.ownerName || 'Pengelola Toko';
 
   const storeNameEl = document.getElementById('store-name-display');
-  if (storeNameEl) storeNameEl.textContent = appState.storeProfile.storeName;
+  if (storeNameEl) storeNameEl.textContent = storeName;
+
+  const sideStoreNameEl = document.getElementById('sidebar-store-name');
+  if (sideStoreNameEl) sideStoreNameEl.textContent = storeName;
+
+  const sideOwnerNameEl = document.getElementById('sidebar-owner-name');
+  if (sideOwnerNameEl) sideOwnerNameEl.textContent = ownerName;
+
+  const sideInitialEl = document.getElementById('sidebar-owner-initial');
+  if (sideInitialEl) sideInitialEl.textContent = storeName.trim().charAt(0).toUpperCase() || 'T';
 
   const cashEl = document.getElementById('header-cash-balance');
   if (cashEl) cashEl.textContent = formatRupiah(appState.storeProfile.cashBalance);
 
+  const currentDay = appState.dailySession?.dayNumber || 1;
+  const todayRevenue = (appState.transactions || [])
+    .filter((t) => (t.dayNumber || 1) === currentDay && t.type === 'SALE')
+    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
   const headerLevelEl = document.getElementById('header-level-label');
-  if (headerLevelEl) headerLevelEl.textContent = `Lv.${lvl.level} ${lvl.title.split(' ')[0]}`;
+  if (headerLevelEl) headerLevelEl.textContent = 'Pendapatan Hari Ini';
 
   const headerXpEl = document.getElementById('header-xp-label');
-  if (headerXpEl) headerXpEl.textContent = `${xp} XP`;
-
-  const sideLevelEl = document.getElementById('sidebar-level-badge');
-  if (sideLevelEl) sideLevelEl.textContent = `Lv. ${lvl.level}`;
-
-  const sideTitleEl = document.getElementById('sidebar-level-title');
-  if (sideTitleEl) sideTitleEl.textContent = lvl.title;
-
-  const sideXpBarEl = document.getElementById('sidebar-xp-bar');
-  if (sideXpBarEl) sideXpBarEl.style.width = `${progressPercent}%`;
-
-  const sideXpTextEl = document.getElementById('sidebar-xp-text');
-  if (sideXpTextEl) sideXpTextEl.textContent = `${xp} XP`;
-
-  const sideNextXpEl = document.getElementById('sidebar-next-xp');
-  if (sideNextXpEl) sideNextXpEl.textContent = `Target: ${lvl.next} XP`;
-
-  const badgeCountEl = document.getElementById('sidebar-badge-count');
-  if (badgeCountEl) badgeCountEl.textContent = `${unlockedCount}/${BADGE_DEFINITIONS.length}`;
+  if (headerXpEl) headerXpEl.textContent = formatRupiah(todayRevenue);
 
   const shiftBtn = document.getElementById('store-shift-btn');
   const shiftIcon = document.getElementById('store-shift-icon');
@@ -184,22 +178,32 @@ export function openBadgesAndProfileModal(ctx) {
 
   const bodyHTML = `
     <div class="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-      <div>
-        <label for="profile-store-name" class="block text-xs font-bold text-slate-700 mb-1">Nama Toko Anda</label>
-        <div class="flex gap-2">
+      <div class="space-y-3">
+        <div>
+          <label for="profile-store-name" class="block text-xs font-bold text-slate-700 mb-1">Nama Usaha / Toko</label>
           <input
             type="text"
             id="profile-store-name"
             value="${escapeHTML(appState.storeProfile.storeName)}"
             maxlength="48"
-            class="flex-1 px-3.5 py-2 min-h-[42px] border border-slate-300 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-teal-600"
+            class="w-full px-3.5 py-2 min-h-[42px] border border-slate-300 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-teal-600"
           />
-          <button
-            type="button"
-            id="save-store-name-btn"
-            class="px-4 py-2 min-h-[42px] rounded-xl text-sm font-bold bg-teal-700 hover:bg-teal-800 text-white transition cursor-pointer shrink-0"
-          >Simpan</button>
         </div>
+        <div>
+          <label for="profile-owner-name" class="block text-xs font-bold text-slate-700 mb-1">Nama Pemilik / Pengelola</label>
+          <input
+            type="text"
+            id="profile-owner-name"
+            value="${escapeHTML(appState.storeProfile.ownerName || 'Pengelola Toko')}"
+            maxlength="48"
+            class="w-full px-3.5 py-2 min-h-[42px] border border-slate-300 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-teal-600"
+          />
+        </div>
+        <button
+          type="button"
+          id="save-store-name-btn"
+          class="w-full px-4 py-2 min-h-[42px] rounded-xl text-sm font-bold bg-teal-700 hover:bg-teal-800 text-white transition cursor-pointer"
+        >Simpan Profil Usaha</button>
       </div>
 
       <div class="pt-2 border-t border-slate-200">
@@ -213,7 +217,7 @@ export function openBadgesAndProfileModal(ctx) {
   `;
 
   openModal({
-    title: 'Profil Toko & Lencana Wirausaha',
+    title: 'Profil Usaha & Lencana',
     bodyHTML,
     footerHTML: `
       <button type="button" id="close-profile-modal-btn" class="px-4 py-2 min-h-[40px] rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer">
@@ -223,18 +227,21 @@ export function openBadgesAndProfileModal(ctx) {
     onMount: () => {
       const closeBtn = document.getElementById('close-profile-modal-btn');
       const saveBtn = document.getElementById('save-store-name-btn');
-      const input = document.getElementById('profile-store-name');
+      const storeInput = document.getElementById('profile-store-name');
+      const ownerInput = document.getElementById('profile-owner-name');
 
       closeBtn?.addEventListener('click', closeModal);
       saveBtn?.addEventListener('click', () => {
-        const nextName = input instanceof HTMLInputElement ? input.value.trim() : '';
-        if (!nextName) {
-          showToast('Nama toko tidak boleh kosong.', 'error');
+        const nextStore = storeInput instanceof HTMLInputElement ? storeInput.value.trim() : '';
+        const nextOwner = ownerInput instanceof HTMLInputElement ? ownerInput.value.trim() : '';
+        if (!nextStore) {
+          showToast('Nama usaha tidak boleh kosong.', 'error');
           return;
         }
-        appState.storeProfile.storeName = nextName;
+        appState.storeProfile.storeName = nextStore;
+        appState.storeProfile.ownerName = nextOwner || 'Pengelola Toko';
         persistAndRefresh();
-        showToast(`Nama toko diperbarui menjadi "${nextName}".`, 'success');
+        showToast('Profil usaha berhasil diperbarui.', 'success');
         closeModal();
       });
     }

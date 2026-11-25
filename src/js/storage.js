@@ -11,6 +11,10 @@ export function normalizeState(candidate) {
       typeof candidate.storeProfile?.storeName === 'string' && candidate.storeProfile.storeName.trim()
         ? candidate.storeProfile.storeName.trim()
         : defaults.storeProfile.storeName,
+    ownerName:
+      typeof candidate.storeProfile?.ownerName === 'string' && candidate.storeProfile.ownerName.trim()
+        ? candidate.storeProfile.ownerName.trim()
+        : defaults.storeProfile.ownerName,
     cashBalance: Number.isFinite(Number(candidate.storeProfile?.cashBalance))
       ? Number(candidate.storeProfile.cashBalance)
       : defaults.storeProfile.cashBalance

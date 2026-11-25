@@ -212,9 +212,6 @@ function wireStaticListeners() {
     editProfileBtn.addEventListener('click', () => openBadgesAndProfileModal(ctx));
   }
 
-  const marginTipIcon = document.getElementById('margin-tip-icon');
-  if (marginTipIcon) marginTipIcon.innerHTML = renderIcon('lightbulb', 'w-5 h-5');
-
   hydrateStaticIcons();
   initModalChrome();
 
@@ -228,7 +225,7 @@ function wireStaticListeners() {
   document.getElementById('store-shift-btn')?.addEventListener('click', openShiftActionModal);
   document.getElementById('laporan-shift-action-btn')?.addEventListener('click', openShiftActionModal);
   document.getElementById('open-badges-btn')?.addEventListener('click', () => openBadgesAndProfileModal(ctx));
-  document.getElementById('header-gamification-btn')?.addEventListener('click', () => openBadgesAndProfileModal(ctx));
+  document.getElementById('header-gamification-btn')?.addEventListener('click', () => switchTab('laporan'));
   document.getElementById('open-backup-btn')?.addEventListener('click', () => openBackupRestoreModal(ctx));
   document.getElementById('reset-data-btn')?.addEventListener('click', openConfirmResetModal);
   document.getElementById('export-csv-btn')?.addEventListener('click', () => exportTransactionsCSV(ctx));

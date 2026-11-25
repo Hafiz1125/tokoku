@@ -75,6 +75,7 @@ export function getDefaultState() {
   return {
     storeProfile: {
       storeName: 'Toko Kelontong Sejahtera',
+      ownerName: 'Pengelola Toko',
       cashBalance: 5000000
     },
     dailySession: {
