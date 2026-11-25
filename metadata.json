@@ -1,0 +1,6 @@
+{
+  "name": "TokoKu",
+  "description": "Aplikasi edukasi dan simulasi manajemen toko kelontong cerdas untuk menghitung margin, reorder point, kasir POS, stock opname, dan laporan harian.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
