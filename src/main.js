@@ -7,6 +7,7 @@ import {
 } from './js/auth.js';
 import { BADGE_DEFINITIONS, getDefaultState } from './js/constants.js';
 import { hydrateStaticIcons, renderIcon } from './js/icons.js';
+import { resetBuyerState, setBuyerSessionData, wireBuyerListeners } from './js/modules/buyer.js';
 import {
   addToCart,
   checkoutCart,
@@ -48,17 +49,34 @@ const posCart = {};
 function showAuthScreen() {
   const authScreen = document.getElementById('auth-screen');
   const appShell = document.getElementById('app-shell');
+  const buyerShell = document.getElementById('buyer-shell');
   authScreen?.classList.remove('hidden');
   appShell?.classList.add('hidden');
   appShell?.classList.remove('flex');
+  buyerShell?.classList.add('hidden');
+  buyerShell?.classList.remove('flex');
 }
 
 function showAppShell() {
   const authScreen = document.getElementById('auth-screen');
   const appShell = document.getElementById('app-shell');
+  const buyerShell = document.getElementById('buyer-shell');
   authScreen?.classList.add('hidden');
+  buyerShell?.classList.add('hidden');
+  buyerShell?.classList.remove('flex');
   appShell?.classList.remove('hidden');
   appShell?.classList.add('flex');
+}
+
+function showBuyerShell() {
+  const authScreen = document.getElementById('auth-screen');
+  const appShell = document.getElementById('app-shell');
+  const buyerShell = document.getElementById('buyer-shell');
+  authScreen?.classList.add('hidden');
+  appShell?.classList.add('hidden');
+  appShell?.classList.remove('flex');
+  buyerShell?.classList.remove('hidden');
+  buyerShell?.classList.add('flex');
 }
 
 function renderActiveTab() {
@@ -238,6 +256,7 @@ function handleLogout() {
   Object.keys(posCart).forEach((k) => delete posCart[k]);
   appState = getDefaultState();
   ctx.appState = appState;
+  resetBuyerState();
   closeModal();
   showAuthScreen();
   authController?.resetToLogin();
@@ -348,6 +367,9 @@ function wireStaticListeners() {
 
   // Tab 5: Laporan
   document.getElementById('laporan-day-filter')?.addEventListener('change', () => renderDailyTransactions(ctx));
+
+  // Portal Pembeli
+  wireBuyerListeners({ onLogout: handleLogout });
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -355,7 +377,14 @@ window.addEventListener('DOMContentLoaded', () => {
   showAuthScreen();
 
   authController = initAuthScreen({
-    onAuthenticated: ({ user, storeState }) => {
+    onAuthenticated: ({ user, storeState, shopData, orders }) => {
+      if (user?.role === 'pembeli') {
+        showBuyerShell();
+        setBuyerSessionData({ user, shopData, orders });
+        showToast(`Selamat datang, ${user.ownerName}!`, 'success');
+        return;
+      }
+
       appState = normalizeState(storeState);
       ctx.appState = appState;
       Object.keys(posCart).forEach((k) => delete posCart[k]);
