@@ -1,3 +1,10 @@
+import {
+  clearAuthSession,
+  getAuthToken,
+  getCurrentUser,
+  initAuthScreen,
+  saveStoreToServer
+} from './js/auth.js';
 import { BADGE_DEFINITIONS, getDefaultState } from './js/constants.js';
 import { hydrateStaticIcons, renderIcon } from './js/icons.js';
 import {
@@ -22,7 +29,7 @@ import {
 } from './js/modules/produk.js';
 import { openAuditStockModal, renderSisaStock } from './js/modules/sisa.js';
 import { executeRestock, renderStockCards } from './js/modules/stock.js';
-import { loadState, saveState } from './js/storage.js';
+import { normalizeState } from './js/storage.js';
 import {
   closeModal,
   initModalChrome,
@@ -33,9 +40,26 @@ import {
 } from './js/ui.js';
 import { getLevelInfo } from './js/utils.js';
 
-let appState = loadState();
+let appState = getDefaultState();
 let activeTab = 'produk';
+let authController = null;
 const posCart = {};
+
+function showAuthScreen() {
+  const authScreen = document.getElementById('auth-screen');
+  const appShell = document.getElementById('app-shell');
+  authScreen?.classList.remove('hidden');
+  appShell?.classList.add('hidden');
+  appShell?.classList.remove('flex');
+}
+
+function showAppShell() {
+  const authScreen = document.getElementById('auth-screen');
+  const appShell = document.getElementById('app-shell');
+  authScreen?.classList.add('hidden');
+  appShell?.classList.remove('hidden');
+  appShell?.classList.add('flex');
+}
 
 function renderActiveTab() {
   if (activeTab === 'produk') renderProductsGrid(ctx);
@@ -49,15 +73,18 @@ function renderActiveTab() {
 }
 
 function persistAndRefresh() {
-  if (!saveState(appState)) {
-    showToast('Gagal menyimpan data ke penyimpanan browser.', 'error');
-  }
-  updateHeaderAndGamificationUI(appState);
+  updateHeaderAndGamificationUI(appState, getCurrentUser());
   renderActiveTab();
+
+  if (getAuthToken()) {
+    saveStoreToServer(appState).catch((err) => {
+      showToast(err instanceof Error ? err.message : 'Gagal menyinkronkan data ke server.', 'error');
+    });
+  }
 }
 
 function replaceState(nextState) {
-  appState = nextState;
+  appState = normalizeState(nextState);
   ctx.appState = appState;
   Object.keys(posCart).forEach((k) => delete posCart[k]);
   persistAndRefresh();
@@ -93,8 +120,10 @@ function awardXP(amount, reasonText) {
   appState.gamification.xp += amount;
   const newLevelInfo = getLevelInfo(appState.gamification.xp);
 
-  saveState(appState);
-  updateHeaderAndGamificationUI(appState);
+  updateHeaderAndGamificationUI(appState, getCurrentUser());
+  if (getAuthToken()) {
+    saveStoreToServer(appState).catch(() => {});
+  }
   showToast(`+${amount} XP: ${reasonText}`, 'xp');
 
   if (newLevelInfo.level > oldLevel) {
@@ -111,8 +140,10 @@ function unlockBadge(badgeId) {
   if (!appState.gamification.unlockedBadges.includes(badgeId)) {
     appState.gamification.unlockedBadges.push(badgeId);
     const badge = BADGE_DEFINITIONS.find((b) => b.id === badgeId);
-    saveState(appState);
-    updateHeaderAndGamificationUI(appState);
+    updateHeaderAndGamificationUI(appState, getCurrentUser());
+    if (getAuthToken()) {
+      saveStoreToServer(appState).catch(() => {});
+    }
     if (badge) {
       setTimeout(() => {
         showToast(`Lencana Terbuka: ${badge.title}!`, 'success');
@@ -191,7 +222,10 @@ function openConfirmResetModal() {
     onMount: () => {
       document.getElementById('cancel-reset-btn')?.addEventListener('click', closeModal);
       document.getElementById('confirm-reset-btn')?.addEventListener('click', () => {
-        replaceState(getDefaultState());
+        const fresh = getDefaultState();
+        fresh.storeProfile.storeName = appState.storeProfile.storeName;
+        fresh.storeProfile.ownerName = appState.storeProfile.ownerName;
+        replaceState(fresh);
         closeModal();
         showToast('Data simulasi berhasil diatur ulang ke kondisi awal.', 'info');
       });
@@ -199,7 +233,21 @@ function openConfirmResetModal() {
   });
 }
 
+function handleLogout() {
+  clearAuthSession();
+  Object.keys(posCart).forEach((k) => delete posCart[k]);
+  appState = getDefaultState();
+  ctx.appState = appState;
+  closeModal();
+  showAuthScreen();
+  authController?.resetToLogin();
+  showToast('Anda telah keluar dari akun.', 'info');
+}
+
 function wireStaticListeners() {
+  const authBrandLogo = document.getElementById('auth-brand-icon');
+  if (authBrandLogo) authBrandLogo.innerHTML = renderIcon('store', 'w-6 h-6');
+
   const brandLogo = document.getElementById('brand-logo-icon');
   if (brandLogo) brandLogo.innerHTML = renderIcon('store', 'w-5 h-5');
 
@@ -213,6 +261,7 @@ function wireStaticListeners() {
   }
 
   hydrateStaticIcons();
+  window.addEventListener('tokoku:refresh-icons', hydrateStaticIcons);
   initModalChrome();
 
   document.querySelectorAll('[data-nav]').forEach((btn) => {
@@ -228,6 +277,8 @@ function wireStaticListeners() {
   document.getElementById('header-gamification-btn')?.addEventListener('click', () => switchTab('laporan'));
   document.getElementById('open-backup-btn')?.addEventListener('click', () => openBackupRestoreModal(ctx));
   document.getElementById('reset-data-btn')?.addEventListener('click', openConfirmResetModal);
+  document.getElementById('logout-btn')?.addEventListener('click', handleLogout);
+  document.getElementById('mobile-logout-btn')?.addEventListener('click', handleLogout);
   document.getElementById('export-csv-btn')?.addEventListener('click', () => exportTransactionsCSV(ctx));
 
   // Tab 1: Produk
@@ -301,6 +352,17 @@ function wireStaticListeners() {
 
 window.addEventListener('DOMContentLoaded', () => {
   wireStaticListeners();
-  updateHeaderAndGamificationUI(appState);
-  switchTab('produk');
+  showAuthScreen();
+
+  authController = initAuthScreen({
+    onAuthenticated: ({ user, storeState }) => {
+      appState = normalizeState(storeState);
+      ctx.appState = appState;
+      Object.keys(posCart).forEach((k) => delete posCart[k]);
+      showAppShell();
+      updateHeaderAndGamificationUI(appState, user);
+      switchTab('produk');
+      showToast(`Selamat datang, ${user.ownerName}!`, 'success');
+    }
+  });
 });

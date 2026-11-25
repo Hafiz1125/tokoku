@@ -99,7 +99,7 @@ export function initModalChrome() {
   });
 }
 
-export function updateHeaderAndGamificationUI(appState) {
+export function updateHeaderAndGamificationUI(appState, currentUser = null) {
   const storeName = appState.storeProfile.storeName || 'Toko Kelontong Sejahtera';
   const ownerName = appState.storeProfile.ownerName || 'Pengelola Toko';
 
@@ -110,7 +110,9 @@ export function updateHeaderAndGamificationUI(appState) {
   if (sideStoreNameEl) sideStoreNameEl.textContent = storeName;
 
   const sideOwnerNameEl = document.getElementById('sidebar-owner-name');
-  if (sideOwnerNameEl) sideOwnerNameEl.textContent = ownerName;
+  if (sideOwnerNameEl) {
+    sideOwnerNameEl.textContent = currentUser?.username ? `${ownerName} · @${currentUser.username}` : ownerName;
+  }
 
   const sideInitialEl = document.getElementById('sidebar-owner-initial');
   if (sideInitialEl) sideInitialEl.textContent = storeName.trim().charAt(0).toUpperCase() || 'T';

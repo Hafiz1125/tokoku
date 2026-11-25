@@ -23,7 +23,7 @@
     />
     <link rel="stylesheet" href="/src/styles/main.css" />
   </head>
-  <body class="min-h-screen flex flex-col md:flex-row pb-20 md:pb-0 bg-slate-50 text-slate-900 antialiased">
+  <body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
     <!-- Area Notifikasi Toast -->
     <div
       id="toast-container"
@@ -58,11 +58,179 @@
       </div>
     </div>
 
-    <!-- Sidebar Navigasi Desktop -->
-    <aside
-      aria-label="Navigasi Utama"
-      class="hidden md:flex md:w-72 md:flex-col md:fixed md:inset-y-0 bg-white border-r border-slate-200 z-30"
+    <!-- Halaman Login & Registrasi Akun -->
+    <section
+      id="auth-screen"
+      aria-label="Halaman Login Pengguna"
+      class="min-h-screen w-full flex items-center justify-center px-4 py-10 sm:px-8"
     >
+      <div class="max-w-5xl w-full grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+        <!-- Panel Informasi Kiri -->
+        <div class="lg:col-span-6 space-y-6">
+          <div class="flex items-center gap-3">
+            <div
+              id="auth-brand-icon"
+              class="w-11 h-11 rounded-xl bg-teal-700 text-white flex items-center justify-center shrink-0"
+            ></div>
+            <div>
+              <span class="font-extrabold text-2xl tracking-tight text-slate-900 leading-none">
+                Toko<span class="text-teal-700">Ku</span>
+              </span>
+              <p class="text-xs text-slate-500 font-medium mt-0.5">Manajemen &amp; Edukasi Toko Kelontong</p>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 text-balance leading-tight">
+              Kelola Stok, Margin, dan Kasir Toko dalam Satu Tempat
+            </h1>
+            <p class="text-sm sm:text-base text-slate-600 leading-relaxed max-w-lg">
+              Masuk ke akun usaha Anda untuk mencatat penjualan harian, menghitung titik pesan ulang stok, dan
+              memantau keuntungan toko secara terpisah per akun.
+            </p>
+          </div>
+
+          <div class="pt-4 border-t border-slate-200 space-y-3 text-sm text-slate-700">
+            <div class="flex items-start gap-3">
+              <span data-icon="tag" class="text-teal-700 mt-0.5 shrink-0"></span>
+              <span><strong>Analisis Margin &amp; Harga</strong> &middot; Hitung laba kotor dan lindungi modal saat promo.</span>
+            </div>
+            <div class="flex items-start gap-3">
+              <span data-icon="truck" class="text-teal-700 mt-0.5 shrink-0"></span>
+              <span><strong>Kontrol Stok ROP</strong> &middot; Deteksi kapan harus restock sebelum rak kosong.</span>
+            </div>
+            <div class="flex items-start gap-3">
+              <span data-icon="file-spreadsheet" class="text-teal-700 mt-0.5 shrink-0"></span>
+              <span><strong>Kasir POS &amp; Tutup Toko</strong> &middot; Rekap kas harian otomatis dan ekspor CSV.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel Formulir Kanan -->
+        <div class="lg:col-span-6">
+          <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8">
+            <!-- Segmented Switch Masuk / Daftar -->
+            <div class="flex items-center gap-1 p-1 bg-slate-100 rounded-xl mb-6" role="tablist" aria-label="Mode Autentikasi">
+              <button
+                type="button"
+                id="auth-tab-login"
+                role="tab"
+                class="flex-1 py-2 px-3 min-h-[40px] rounded-lg text-xs sm:text-sm font-bold bg-white text-slate-900 shadow-xs transition cursor-pointer"
+              >
+                Masuk
+              </button>
+              <button
+                type="button"
+                id="auth-tab-register"
+                role="tab"
+                class="flex-1 py-2 px-3 min-h-[40px] rounded-lg text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition cursor-pointer"
+              >
+                Daftar Akun
+              </button>
+            </div>
+
+            <div
+              id="auth-firstrun-note"
+              class="hidden mb-4 p-3 rounded-xl bg-teal-50 border border-teal-200 text-xs text-teal-950 leading-relaxed"
+            >
+              Belum ada akun terdaftar. Buat akun usaha pertama Anda di bawah ini untuk mulai mengelola toko.
+            </div>
+
+            <div
+              id="auth-error-box"
+              role="alert"
+              class="hidden mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs font-medium text-rose-800"
+            ></div>
+
+            <form id="auth-form" class="space-y-4">
+              <div id="auth-register-fields" class="hidden space-y-4">
+                <div>
+                  <label for="auth-store-name" class="block text-xs font-bold text-slate-700 mb-1">
+                    Nama Usaha / Toko
+                  </label>
+                  <input
+                    type="text"
+                    id="auth-store-name"
+                    maxlength="48"
+                    placeholder="Contoh: Toko Berkah Jaya"
+                    class="w-full px-3.5 py-2.5 min-h-[44px] border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                  />
+                </div>
+                <div>
+                  <label for="auth-owner-name" class="block text-xs font-bold text-slate-700 mb-1">
+                    Nama Pemilik / Pengelola
+                  </label>
+                  <input
+                    type="text"
+                    id="auth-owner-name"
+                    maxlength="48"
+                    placeholder="Contoh: Budi Santoso"
+                    class="w-full px-3.5 py-2.5 min-h-[44px] border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label for="auth-username" class="block text-xs font-bold text-slate-700 mb-1">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  id="auth-username"
+                  required
+                  autocomplete="username"
+                  maxlength="32"
+                  placeholder="Contoh: budi.warung"
+                  class="w-full px-3.5 py-2.5 min-h-[44px] border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                />
+              </div>
+
+              <div>
+                <label for="auth-password" class="block text-xs font-bold text-slate-700 mb-1">
+                  Kata Sandi
+                </label>
+                <div class="relative">
+                  <input
+                    type="password"
+                    id="auth-password"
+                    required
+                    autocomplete="current-password"
+                    minlength="6"
+                    maxlength="128"
+                    placeholder="Minimal 6 karakter"
+                    class="w-full pl-3.5 pr-11 py-2.5 min-h-[44px] border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                  />
+                  <button
+                    type="button"
+                    id="auth-toggle-password"
+                    aria-label="Tampilkan atau sembunyikan kata sandi"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 min-w-[36px] min-h-[36px] inline-flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    <span data-eye-icon data-icon="eye" class="shrink-0"></span>
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                id="auth-submit-btn"
+                class="w-full py-3 px-4 min-h-[44px] rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-sm font-bold transition cursor-pointer"
+              >
+                Masuk ke TokoKu
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Shell Aplikasi Utama (Ditampilkan setelah login) -->
+    <div id="app-shell" class="hidden min-h-screen w-full flex-col md:flex-row pb-20 md:pb-0">
+      <!-- Sidebar Navigasi Desktop -->
+      <aside
+        aria-label="Navigasi Utama"
+        class="hidden md:flex md:w-72 md:flex-col md:fixed md:inset-y-0 bg-white border-r border-slate-200 z-30"
+      >
       <!-- Brand Header -->
       <div class="px-6 py-5 border-b border-slate-200 flex items-center gap-3">
         <div
@@ -167,6 +335,14 @@
           <span data-icon="rotate-ccw" class="shrink-0"></span>
           <span>Reset Data Simulasi</span>
         </button>
+        <button
+          type="button"
+          id="logout-btn"
+          class="w-full flex items-center justify-center gap-2 px-3 py-2 min-h-[40px] rounded-xl text-xs font-semibold text-slate-700 hover:text-rose-700 hover:bg-rose-50 border border-slate-200 transition cursor-pointer"
+        >
+          <span data-icon="log-out" class="shrink-0"></span>
+          <span>Keluar Akun</span>
+        </button>
       </div>
     </aside>
 
@@ -195,7 +371,7 @@
                 ></button>
               </div>
               <p class="text-xs text-slate-500 truncate">
-                Simulasi Lokal <span aria-hidden="true">&middot;</span> Tersimpan otomatis di browser
+                Manajemen Toko <span aria-hidden="true">&middot;</span> Tersimpan otomatis pada akun Anda
               </p>
             </div>
           </div>
@@ -232,6 +408,16 @@
             >
               <span id="store-shift-icon" class="shrink-0"></span>
               <span id="store-shift-label">Hari #1 &middot; Buka</span>
+            </button>
+
+            <button
+              type="button"
+              id="mobile-logout-btn"
+              aria-label="Keluar Akun"
+              title="Keluar Akun"
+              class="md:hidden min-w-[40px] min-h-[40px] inline-flex items-center justify-center rounded-xl text-slate-600 hover:text-rose-700 hover:bg-rose-50 border border-slate-200 transition cursor-pointer shrink-0"
+            >
+              <span data-icon="log-out" class="shrink-0"></span>
             </button>
           </div>
         </div>
@@ -663,6 +849,7 @@
         <span>Laporan</span>
       </button>
     </nav>
+    </div>
 
     <script type="module" src="/src/main.js"></script>
   </body>
