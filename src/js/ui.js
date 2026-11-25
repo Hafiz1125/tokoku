@@ -117,12 +117,20 @@ export function updateHeaderAndGamificationUI(appState, currentUser = null) {
   const sideInitialEl = document.getElementById('sidebar-owner-initial');
   if (sideInitialEl) sideInitialEl.textContent = storeName.trim().charAt(0).toUpperCase() || 'T';
 
-  const cashEl = document.getElementById('header-cash-balance');
-  if (cashEl) cashEl.textContent = formatRupiah(appState.storeProfile.cashBalance);
-
   const currentDay = appState.dailySession?.dayNumber || 1;
-  const todayRevenue = (appState.transactions || [])
-    .filter((t) => (t.dayNumber || 1) === currentDay && t.type === 'SALE')
+  const todayTransactions = (appState.transactions || []).filter(
+    (t) => (t.dayNumber || 1) === currentDay
+  );
+  const dailyTrxEl = document.getElementById('header-daily-transactions');
+  if (dailyTrxEl) dailyTrxEl.textContent = `${todayTransactions.length} Transaksi`;
+
+  const todaySalesTransactions = todayTransactions.filter((t) => t.type === 'SALE');
+  const todayRevenue = todaySalesTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+  const todayCashSales = todaySalesTransactions
+    .filter((t) => t.paymentMethod !== 'NON_CASH')
+    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+  const todayNonCashSales = todaySalesTransactions
+    .filter((t) => t.paymentMethod === 'NON_CASH')
     .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
   const headerLevelEl = document.getElementById('header-level-label');
@@ -130,6 +138,12 @@ export function updateHeaderAndGamificationUI(appState, currentUser = null) {
 
   const headerXpEl = document.getElementById('header-xp-label');
   if (headerXpEl) headerXpEl.textContent = formatRupiah(todayRevenue);
+
+  const headerCashSalesEl = document.getElementById('header-cash-sales');
+  if (headerCashSalesEl) headerCashSalesEl.textContent = formatRupiah(todayCashSales);
+
+  const headerNonCashSalesEl = document.getElementById('header-noncash-sales');
+  if (headerNonCashSalesEl) headerNonCashSalesEl.textContent = formatRupiah(todayNonCashSales);
 
   const shiftBtn = document.getElementById('store-shift-btn');
   const shiftIcon = document.getElementById('store-shift-icon');

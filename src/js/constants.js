@@ -76,13 +76,13 @@ export function getDefaultState() {
     storeProfile: {
       storeName: 'Toko Kelontong Sejahtera',
       ownerName: 'Pengelola Toko',
-      cashBalance: 5000000
+      cashBalance: 0
     },
     dailySession: {
       isOpen: true,
       dayNumber: 1,
       openedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-      openingCash: 5000000,
+      openingCash: 0,
       closedAt: null
     },
     gamification: {
@@ -164,6 +164,7 @@ export function getDefaultState() {
       }
     ],
     transactions: [],
-    dailyHistoryArchive: []
+    dailyHistoryArchive: [],
+    dailyAdjustments: {}
   };
 }

@@ -56,10 +56,10 @@ export async function loginUser({ username, password }) {
   return data;
 }
 
-export async function registerUser({ role, username, password, ownerName, storeName, storeId }) {
+export async function registerUser({ username, password, ownerName, storeName }) {
   const data = await apiRequest('/api/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ role, username, password, ownerName, storeName, storeId })
+    body: JSON.stringify({ username, password, ownerName, storeName })
   });
   setAuthSession(data.token, data.user);
   return data;
@@ -77,42 +77,18 @@ export async function saveStoreToServer(storeState) {
   return data;
 }
 
-export async function fetchShopCatalog() {
-  return apiRequest('/api/shop/catalog', { method: 'GET' });
-}
-
-export async function fetchBuyerOrders() {
-  return apiRequest('/api/shop/orders', { method: 'GET' });
-}
-
-export async function submitBuyerCheckout({ items, paymentMethod }) {
-  return apiRequest('/api/shop/checkout', {
-    method: 'POST',
-    body: JSON.stringify({ items, paymentMethod })
-  });
-}
-
 export function initAuthScreen({ onAuthenticated }) {
   let mode = 'login'; // 'login' | 'register'
-  let registerRole = 'admin'; // 'admin' | 'pembeli'
   let passwordVisible = false;
-  let availableStores = [];
 
   const loginTabBtn = document.getElementById('auth-tab-login');
   const registerTabBtn = document.getElementById('auth-tab-register');
   const registerFields = document.getElementById('auth-register-fields');
-  const roleAdminBtn = document.getElementById('auth-role-admin');
-  const roleBuyerBtn = document.getElementById('auth-role-buyer');
-  const adminFields = document.getElementById('auth-admin-fields');
-  const buyerFields = document.getElementById('auth-buyer-fields');
-  const noStoreNote = document.getElementById('auth-no-store-note');
   const form = document.getElementById('auth-form');
   const usernameInput = document.getElementById('auth-username');
   const passwordInput = document.getElementById('auth-password');
   const ownerInput = document.getElementById('auth-owner-name');
   const storeInput = document.getElementById('auth-store-name');
-  const buyerNameInput = document.getElementById('auth-buyer-name');
-  const targetStoreSelect = document.getElementById('auth-target-store');
   const togglePwdBtn = document.getElementById('auth-toggle-password');
   const errorBox = document.getElementById('auth-error-box');
   const firstRunNote = document.getElementById('auth-firstrun-note');
@@ -129,78 +105,6 @@ export function initAuthScreen({ onAuthenticated }) {
     errorBox.innerHTML = escapeHTML(message);
   }
 
-  function renderStoreOptions(stores) {
-    availableStores = Array.isArray(stores) ? stores : [];
-    if (targetStoreSelect instanceof HTMLSelectElement) {
-      if (availableStores.length === 0) {
-        targetStoreSelect.innerHTML = '<option value="">Belum ada toko tersedia</option>';
-        targetStoreSelect.disabled = true;
-      } else {
-        targetStoreSelect.disabled = false;
-        targetStoreSelect.innerHTML = availableStores
-          .map(
-            (s) =>
-              `<option value="${escapeHTML(s.id)}">${escapeHTML(s.storeName)} (${s.isOpen ? 'Buka' : 'Tutup'})</option>`
-          )
-          .join('');
-      }
-    }
-    if (noStoreNote) {
-      noStoreNote.classList.toggle('hidden', availableStores.length > 0);
-    }
-  }
-
-  function updateFieldRequirements() {
-    const isReg = mode === 'register';
-    const isAdminReg = isReg && registerRole === 'admin';
-    const isBuyerReg = isReg && registerRole === 'pembeli';
-
-    if (adminFields) adminFields.classList.toggle('hidden', !isAdminReg);
-    if (buyerFields) buyerFields.classList.toggle('hidden', !isBuyerReg);
-
-    if (ownerInput instanceof HTMLInputElement) ownerInput.required = isAdminReg;
-    if (storeInput instanceof HTMLInputElement) storeInput.required = isAdminReg;
-    if (buyerNameInput instanceof HTMLInputElement) buyerNameInput.required = isBuyerReg;
-    if (targetStoreSelect instanceof HTMLSelectElement) {
-      targetStoreSelect.required = isBuyerReg && availableStores.length > 0;
-    }
-
-    if (submitBtn) {
-      if (!isReg) {
-        submitBtn.textContent = 'Masuk ke TokoKu';
-      } else {
-        submitBtn.textContent =
-          registerRole === 'pembeli' ? 'Daftar & Mulai Belanja' : 'Daftar & Kelola Toko';
-      }
-    }
-  }
-
-  function setRegisterRole(nextRole) {
-    registerRole = nextRole === 'pembeli' ? 'pembeli' : 'admin';
-    setError('');
-
-    const activeClass =
-      'py-2.5 px-3 min-h-[42px] rounded-xl text-xs font-bold border border-teal-700 bg-teal-50 text-teal-800 transition cursor-pointer';
-    const inactiveClass =
-      'py-2.5 px-3 min-h-[42px] rounded-xl text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:border-slate-300 transition cursor-pointer';
-
-    if (roleAdminBtn && roleBuyerBtn) {
-      if (registerRole === 'admin') {
-        roleAdminBtn.className = activeClass;
-        roleAdminBtn.setAttribute('aria-pressed', 'true');
-        roleBuyerBtn.className = inactiveClass;
-        roleBuyerBtn.setAttribute('aria-pressed', 'false');
-      } else {
-        roleBuyerBtn.className = activeClass;
-        roleBuyerBtn.setAttribute('aria-pressed', 'true');
-        roleAdminBtn.className = inactiveClass;
-        roleAdminBtn.setAttribute('aria-pressed', 'false');
-      }
-    }
-
-    updateFieldRequirements();
-  }
-
   function setMode(nextMode) {
     mode = nextMode;
     setError('');
@@ -209,6 +113,8 @@ export function initAuthScreen({ onAuthenticated }) {
     if (registerFields) {
       registerFields.classList.toggle('hidden', !isReg);
     }
+    if (ownerInput instanceof HTMLInputElement) ownerInput.required = isReg;
+    if (storeInput instanceof HTMLInputElement) storeInput.required = isReg;
 
     if (loginTabBtn && registerTabBtn) {
       if (isReg) {
@@ -224,35 +130,13 @@ export function initAuthScreen({ onAuthenticated }) {
       }
     }
 
-    updateFieldRequirements();
-  }
-
-  async function syncAuthStatus(preferAutoMode = false) {
-    try {
-      const status = await fetchAuthStatus();
-      renderStoreOptions(status.stores);
-      if (preferAutoMode) {
-        if (!status.hasUsers) {
-          firstRunNote?.classList.remove('hidden');
-          setRegisterRole('admin');
-          setMode('register');
-        } else {
-          firstRunNote?.classList.add('hidden');
-          setMode('login');
-        }
-      }
-    } catch {
-      if (preferAutoMode) setMode('login');
+    if (submitBtn) {
+      submitBtn.textContent = isReg ? 'Daftar & Masuk ke Toko' : 'Masuk ke TokoKu';
     }
   }
 
   loginTabBtn?.addEventListener('click', () => setMode('login'));
-  registerTabBtn?.addEventListener('click', () => {
-    setMode('register');
-    syncAuthStatus(false);
-  });
-  roleAdminBtn?.addEventListener('click', () => setRegisterRole('admin'));
-  roleBuyerBtn?.addEventListener('click', () => setRegisterRole('pembeli'));
+  registerTabBtn?.addEventListener('click', () => setMode('register'));
 
   togglePwdBtn?.addEventListener('click', () => {
     passwordVisible = !passwordVisible;
@@ -266,8 +150,20 @@ export function initAuthScreen({ onAuthenticated }) {
     window.dispatchEvent(new CustomEvent('tokoku:refresh-icons'));
   });
 
-  setRegisterRole('admin');
-  syncAuthStatus(true);
+  // Cek apakah sudah ada akun terdaftar untuk memandu pengguna baru
+  fetchAuthStatus()
+    .then(({ hasUsers }) => {
+      if (!hasUsers) {
+        firstRunNote?.classList.remove('hidden');
+        setMode('register');
+      } else {
+        firstRunNote?.classList.add('hidden');
+        setMode('login');
+      }
+    })
+    .catch(() => {
+      setMode('login');
+    });
 
   form?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -275,16 +171,8 @@ export function initAuthScreen({ onAuthenticated }) {
 
     const username = usernameInput instanceof HTMLInputElement ? usernameInput.value.trim() : '';
     const password = passwordInput instanceof HTMLInputElement ? passwordInput.value : '';
-    const adminOwnerName = ownerInput instanceof HTMLInputElement ? ownerInput.value.trim() : '';
+    const ownerName = ownerInput instanceof HTMLInputElement ? ownerInput.value.trim() : '';
     const storeName = storeInput instanceof HTMLInputElement ? storeInput.value.trim() : '';
-    const buyerFullName = buyerNameInput instanceof HTMLInputElement ? buyerNameInput.value.trim() : '';
-    const selectedStoreId =
-      targetStoreSelect instanceof HTMLSelectElement ? targetStoreSelect.value : '';
-
-    if (mode === 'register' && registerRole === 'pembeli' && availableStores.length === 0) {
-      setError('Belum ada toko admin yang tersedia. Silakan daftar sebagai Admin Toko terlebih dahulu.');
-      return;
-    }
 
     if (submitBtn instanceof HTMLButtonElement) {
       submitBtn.disabled = true;
@@ -294,14 +182,7 @@ export function initAuthScreen({ onAuthenticated }) {
     try {
       const payload =
         mode === 'register'
-          ? await registerUser({
-              role: registerRole,
-              username,
-              password,
-              ownerName: registerRole === 'pembeli' ? buyerFullName : adminOwnerName,
-              storeName,
-              storeId: selectedStoreId
-            })
+          ? await registerUser({ username, password, ownerName, storeName })
           : await loginUser({ username, password });
 
       if (passwordInput instanceof HTMLInputElement) {
@@ -313,7 +194,7 @@ export function initAuthScreen({ onAuthenticated }) {
     } finally {
       if (submitBtn instanceof HTMLButtonElement) {
         submitBtn.disabled = false;
-        updateFieldRequirements();
+        submitBtn.textContent = mode === 'register' ? 'Daftar & Masuk ke Toko' : 'Masuk ke TokoKu';
       }
     }
   });
@@ -322,7 +203,13 @@ export function initAuthScreen({ onAuthenticated }) {
     resetToLogin: async () => {
       setError('');
       if (passwordInput instanceof HTMLInputElement) passwordInput.value = '';
-      await syncAuthStatus(true);
+      try {
+        const { hasUsers } = await fetchAuthStatus();
+        firstRunNote?.classList.toggle('hidden', hasUsers);
+        setMode(hasUsers ? 'login' : 'register');
+      } catch {
+        setMode('login');
+      }
     }
   };
 }

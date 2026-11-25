@@ -245,6 +245,8 @@ export function checkoutCart(ctx) {
 
   const discountInput = document.getElementById('pos-discount-input');
   const discountPercent = parseInt(discountInput instanceof HTMLInputElement ? discountInput.value : '0', 10) || 0;
+  const paymentRadio = document.querySelector('input[name="pos-payment-method"]:checked');
+  const paymentMethod = paymentRadio instanceof HTMLInputElement && paymentRadio.value === 'NON_CASH' ? 'NON_CASH' : 'CASH';
 
   let subtotal = 0;
   let totalCost = 0;
@@ -275,18 +277,25 @@ export function checkoutCart(ctx) {
     summary: itemDescriptions.join(', '),
     amount: finalTotal,
     profit,
-    discountPercent
+    discountPercent,
+    paymentMethod
   });
 
   Object.keys(posCart).forEach((k) => delete posCart[k]);
   if (discountInput instanceof HTMLInputElement) discountInput.value = '0';
+  const defaultCashRadio = document.querySelector('input[name="pos-payment-method"][value="CASH"]');
+  if (defaultCashRadio instanceof HTMLInputElement) defaultCashRadio.checked = true;
 
   persistAndRefresh();
 
+  const methodLabel = paymentMethod === 'NON_CASH' ? 'Non-Cash' : 'Cash';
   if (profit >= 0) {
-    showToast(`Transaksi berhasil! Omzet ${formatRupiah(finalTotal)} (Laba ${formatRupiah(profit)}).`, 'success');
+    showToast(
+      `Transaksi ${methodLabel} berhasil! Omzet ${formatRupiah(finalTotal)} (Laba ${formatRupiah(profit)}).`,
+      'success'
+    );
     awardXP(15, 'Menyelesaikan transaksi penjualan sehat');
   } else {
-    showToast(`Transaksi selesai dengan rugi ${formatRupiah(Math.abs(profit))}. Evaluasi diskon Anda!`, 'error');
+    showToast(`Transaksi ${methodLabel} selesai dengan rugi ${formatRupiah(Math.abs(profit))}. Evaluasi diskon Anda!`, 'error');
   }
 }

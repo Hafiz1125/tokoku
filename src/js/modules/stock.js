@@ -83,7 +83,7 @@ export function renderStockCards(ctx) {
               data-id="${escapeHTML(p.id)}"
               class="px-4 py-2 min-h-[42px] bg-teal-700 hover:bg-teal-800 text-white text-sm font-bold rounded-xl transition shrink-0 whitespace-nowrap cursor-pointer"
             >
-              + Beli Stok
+              + Tambah Stok
             </button>
           </div>
         </article>
@@ -103,29 +103,22 @@ export function executeRestock(ctx, productId) {
     return;
   }
 
-  const totalCost = qty * prod.costPrice;
-  if (appState.storeProfile.cashBalance < totalCost) {
-    showToast(`Kas toko tidak mencukupi! Butuh ${formatRupiah(totalCost)}.`, 'error');
-    return;
-  }
-
   const wasBelowROP = prod.stock <= calculateROP(prod);
-  appState.storeProfile.cashBalance -= totalCost;
   prod.stock += qty;
 
   recordDailyTransaction({
     type: 'RESTOCK',
-    summary: `Restock +${qty} ${prod.name}`,
-    amount: totalCost,
+    summary: `Tambah stok +${qty} ${prod.name} (Grosir/Sales)`,
+    amount: 0,
     profit: 0,
     discountPercent: 0
   });
 
   persistAndRefresh();
-  showToast(`Berhasil restock +${qty} ${prod.name} (${formatRupiah(totalCost)}).`, 'success');
+  showToast(`Berhasil menambah +${qty} stok ${prod.name}.`, 'success');
 
   if (wasBelowROP) {
-    awardXP(25, 'Restock tepat waktu saat menyentuh titik ROP');
+    awardXP(25, 'Menambah stok tepat waktu saat menyentuh titik ROP');
     unlockBadge('stock_master');
   }
 }

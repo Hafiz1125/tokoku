@@ -7,7 +7,6 @@ import {
 } from './js/auth.js';
 import { BADGE_DEFINITIONS, getDefaultState } from './js/constants.js';
 import { hydrateStaticIcons, renderIcon } from './js/icons.js';
-import { resetBuyerState, setBuyerSessionData, wireBuyerListeners } from './js/modules/buyer.js';
 import {
   addToCart,
   checkoutCart,
@@ -20,6 +19,7 @@ import {
   exportTransactionsCSV,
   openBackupRestoreModal,
   openDailyClosingModal,
+  openEditTodayIncomeModal,
   openStartNewDayModal,
   renderDailyTransactions
 } from './js/modules/laporan.js';
@@ -49,44 +49,29 @@ const posCart = {};
 function showAuthScreen() {
   const authScreen = document.getElementById('auth-screen');
   const appShell = document.getElementById('app-shell');
-  const buyerShell = document.getElementById('buyer-shell');
   authScreen?.classList.remove('hidden');
   appShell?.classList.add('hidden');
   appShell?.classList.remove('flex');
-  buyerShell?.classList.add('hidden');
-  buyerShell?.classList.remove('flex');
 }
 
 function showAppShell() {
   const authScreen = document.getElementById('auth-screen');
   const appShell = document.getElementById('app-shell');
-  const buyerShell = document.getElementById('buyer-shell');
   authScreen?.classList.add('hidden');
-  buyerShell?.classList.add('hidden');
-  buyerShell?.classList.remove('flex');
   appShell?.classList.remove('hidden');
   appShell?.classList.add('flex');
 }
 
-function showBuyerShell() {
-  const authScreen = document.getElementById('auth-screen');
-  const appShell = document.getElementById('app-shell');
-  const buyerShell = document.getElementById('buyer-shell');
-  authScreen?.classList.add('hidden');
-  appShell?.classList.add('hidden');
-  appShell?.classList.remove('flex');
-  buyerShell?.classList.remove('hidden');
-  buyerShell?.classList.add('flex');
-}
-
 function renderActiveTab() {
   if (activeTab === 'produk') renderProductsGrid(ctx);
-  if (activeTab === 'stock') renderStockCards(ctx);
+  if (activeTab === 'stock') {
+    renderStockCards(ctx);
+    renderSisaStock(ctx);
+  }
   if (activeTab === 'harga') {
     renderPOSProducts(ctx);
     renderCart(ctx);
   }
-  if (activeTab === 'sisa') renderSisaStock(ctx);
   if (activeTab === 'laporan') renderDailyTransactions(ctx);
 }
 
@@ -108,7 +93,7 @@ function replaceState(nextState) {
   persistAndRefresh();
 }
 
-function recordDailyTransaction({ type, summary, amount, profit, discountPercent }) {
+function recordDailyTransaction({ type, summary, amount, profit, discountPercent, paymentMethod }) {
   const now = new Date();
   const timeStr = now.toLocaleTimeString('id-ID', {
     hour: '2-digit',
@@ -129,7 +114,8 @@ function recordDailyTransaction({ type, summary, amount, profit, discountPercent
     summary,
     amount,
     profit,
-    discountPercent: discountPercent || 0
+    discountPercent: discountPercent || 0,
+    paymentMethod: paymentMethod || (type === 'SALE' ? 'CASH' : null)
   });
 }
 
@@ -190,17 +176,28 @@ const ctx = {
 };
 
 function switchTab(tabName) {
-  activeTab = tabName;
+  activeTab = tabName === 'sisa' ? 'stock' : tabName;
 
   document.querySelectorAll('main section[id^="tab-"]').forEach((sec) => {
     sec.classList.add('hidden');
   });
 
-  const target = document.getElementById(`tab-${tabName}`);
+  const target = document.getElementById(`tab-${activeTab}`);
   target?.classList.remove('hidden');
 
+  const kasirMetricsEl = document.getElementById('header-kasir-metrics');
+  if (kasirMetricsEl) {
+    if (activeTab === 'harga') {
+      kasirMetricsEl.classList.remove('hidden');
+      kasirMetricsEl.classList.add('flex');
+    } else {
+      kasirMetricsEl.classList.add('hidden');
+      kasirMetricsEl.classList.remove('flex');
+    }
+  }
+
   document.querySelectorAll('.nav-btn').forEach((btn) => {
-    const isActive = btn.getAttribute('data-nav') === tabName;
+    const isActive = btn.getAttribute('data-nav') === activeTab;
     if (isActive) {
       btn.classList.add('bg-teal-50', 'text-teal-800');
       btn.classList.remove('text-slate-600', 'hover:bg-slate-50');
@@ -213,7 +210,7 @@ function switchTab(tabName) {
   });
 
   document.querySelectorAll('.nav-btn-mobile').forEach((btn) => {
-    const isActive = btn.getAttribute('data-nav') === tabName;
+    const isActive = btn.getAttribute('data-nav') === activeTab;
     if (isActive) {
       btn.classList.add('text-teal-700', 'bg-teal-50');
       btn.classList.remove('text-slate-600');
@@ -256,7 +253,6 @@ function handleLogout() {
   Object.keys(posCart).forEach((k) => delete posCart[k]);
   appState = getDefaultState();
   ctx.appState = appState;
-  resetBuyerState();
   closeModal();
   showAuthScreen();
   authController?.resetToLogin();
@@ -365,11 +361,24 @@ function wireStaticListeners() {
     }
   });
 
-  // Tab 5: Laporan
-  document.getElementById('laporan-day-filter')?.addEventListener('change', () => renderDailyTransactions(ctx));
-
-  // Portal Pembeli
-  wireBuyerListeners({ onLogout: handleLogout });
+  // Tab 4: Laporan
+  document.getElementById('monthly-day-select')?.addEventListener('change', (event) => {
+    const sel = event.target;
+    const dayFilterEl = document.getElementById('laporan-day-filter');
+    if (sel instanceof HTMLSelectElement && dayFilterEl instanceof HTMLSelectElement) {
+      dayFilterEl.value = sel.value;
+    }
+    renderDailyTransactions(ctx);
+  });
+  document.getElementById('laporan-day-filter')?.addEventListener('change', (event) => {
+    const sel = event.target;
+    const monthlyDaySelect = document.getElementById('monthly-day-select');
+    if (sel instanceof HTMLSelectElement && monthlyDaySelect instanceof HTMLSelectElement) {
+      monthlyDaySelect.value = sel.value;
+    }
+    renderDailyTransactions(ctx);
+  });
+  document.getElementById('edit-today-income-btn')?.addEventListener('click', () => openEditTodayIncomeModal(ctx));
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -377,14 +386,7 @@ window.addEventListener('DOMContentLoaded', () => {
   showAuthScreen();
 
   authController = initAuthScreen({
-    onAuthenticated: ({ user, storeState, shopData, orders }) => {
-      if (user?.role === 'pembeli') {
-        showBuyerShell();
-        setBuyerSessionData({ user, shopData, orders });
-        showToast(`Selamat datang, ${user.ownerName}!`, 'success');
-        return;
-      }
-
+    onAuthenticated: ({ user, storeState }) => {
       appState = normalizeState(storeState);
       ctx.appState = appState;
       Object.keys(posCart).forEach((k) => delete posCart[k]);

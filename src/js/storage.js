@@ -63,13 +63,27 @@ export function normalizeState(candidate) {
     ? candidate.dailyHistoryArchive
     : [];
 
+  const dailyAdjustments = {};
+  if (candidate.dailyAdjustments && typeof candidate.dailyAdjustments === 'object') {
+    Object.entries(candidate.dailyAdjustments).forEach(([dayKey, adj]) => {
+      if (adj && typeof adj === 'object' && Number.isFinite(Number(adj.expense))) {
+        dailyAdjustments[String(dayKey)] = {
+          expense: Number(adj.expense),
+          note: typeof adj.note === 'string' ? adj.note.trim().slice(0, 120) : '',
+          updatedAt: typeof adj.updatedAt === 'string' ? adj.updatedAt : ''
+        };
+      }
+    });
+  }
+
   return {
     storeProfile,
     dailySession,
     gamification,
     products,
     transactions,
-    dailyHistoryArchive
+    dailyHistoryArchive,
+    dailyAdjustments
   };
 }
 
