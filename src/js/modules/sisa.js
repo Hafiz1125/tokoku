@@ -7,9 +7,24 @@ export function renderSisaStock(ctx) {
   const tbody = document.getElementById('sisa-stock-table-body');
   if (!tbody) return;
 
-  let totalAssetCost = 0;
-  let totalPotentialRev = 0;
-  let lowStockCount = 0;
+  const searchEl = document.getElementById('stock-search-input');
+  const statusEl = document.getElementById('stock-status-filter');
+  const query = searchEl instanceof HTMLInputElement ? searchEl.value.trim().toLowerCase() : '';
+  const statusFilter = statusEl instanceof HTMLSelectElement ? statusEl.value : 'ALL';
+
+  const filtered = appState.products.filter((p) => {
+    const rop = calculateROP(p);
+    const needsRestock = p.stock <= rop;
+    const matchQuery =
+      !query ||
+      p.name.toLowerCase().includes(query) ||
+      (p.category || '').toLowerCase().includes(query);
+    const matchStatus =
+      statusFilter === 'ALL' ||
+      (statusFilter === 'LOW' && needsRestock) ||
+      (statusFilter === 'SAFE' && !needsRestock);
+    return matchQuery && matchStatus;
+  });
 
   if (appState.products.length === 0) {
     tbody.innerHTML = `
@@ -19,15 +34,19 @@ export function renderSisaStock(ctx) {
         </td>
       </tr>
     `;
+  } else if (filtered.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="py-8 px-4 text-center text-sm text-slate-500">
+          Tidak ada produk yang cocok dengan filter stok.
+        </td>
+      </tr>
+    `;
   } else {
-    tbody.innerHTML = appState.products
+    tbody.innerHTML = filtered
       .map((p) => {
         const assetVal = p.stock * p.costPrice;
-        const potRev = p.stock * p.sellPrice;
         const rop = calculateROP(p);
-
-        totalAssetCost += assetVal;
-        totalPotentialRev += potRev;
 
         let statusHTML = `<span class="inline-flex items-center gap-1 text-xs font-bold text-emerald-700">${renderIcon(
           'check-circle',
@@ -35,13 +54,11 @@ export function renderSisaStock(ctx) {
         )} Aman</span>`;
 
         if (p.stock === 0) {
-          lowStockCount++;
           statusHTML = `<span class="inline-flex items-center gap-1 text-xs font-bold text-rose-700">${renderIcon(
             'alert-circle',
             'w-3.5 h-3.5'
           )} Habis (0)</span>`;
         } else if (p.stock <= rop) {
-          lowStockCount++;
           statusHTML = `<span class="inline-flex items-center gap-1 text-xs font-bold text-amber-700">${renderIcon(
             'alert-triangle',
             'w-3.5 h-3.5'
@@ -72,14 +89,6 @@ export function renderSisaStock(ctx) {
       })
       .join('');
   }
-
-  const assetEl = document.getElementById('kpi-asset-value');
-  const revEl = document.getElementById('kpi-potential-revenue');
-  const lowEl = document.getElementById('kpi-low-stock-count');
-
-  if (assetEl) assetEl.textContent = formatRupiah(totalAssetCost);
-  if (revEl) revEl.textContent = formatRupiah(totalPotentialRev);
-  if (lowEl) lowEl.textContent = `${lowStockCount} Produk`;
 }
 
 export function openAuditStockModal(ctx, productId) {

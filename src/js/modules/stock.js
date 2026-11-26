@@ -7,6 +7,25 @@ export function renderStockCards(ctx) {
   const grid = document.getElementById('stock-cards-grid');
   if (!grid) return;
 
+  const searchEl = document.getElementById('stock-search-input');
+  const statusEl = document.getElementById('stock-status-filter');
+  const query = searchEl instanceof HTMLInputElement ? searchEl.value.trim().toLowerCase() : '';
+  const statusFilter = statusEl instanceof HTMLSelectElement ? statusEl.value : 'ALL';
+
+  const filtered = appState.products.filter((p) => {
+    const rop = calculateROP(p);
+    const needsRestock = p.stock <= rop;
+    const matchQuery =
+      !query ||
+      p.name.toLowerCase().includes(query) ||
+      (p.category || '').toLowerCase().includes(query);
+    const matchStatus =
+      statusFilter === 'ALL' ||
+      (statusFilter === 'LOW' && needsRestock) ||
+      (statusFilter === 'SAFE' && !needsRestock);
+    return matchQuery && matchStatus;
+  });
+
   if (appState.products.length === 0) {
     grid.innerHTML = `
       <div class="col-span-full bg-white rounded-2xl border border-slate-200 py-12 px-6 text-center">
@@ -16,7 +35,16 @@ export function renderStockCards(ctx) {
     return;
   }
 
-  grid.innerHTML = appState.products
+  if (filtered.length === 0) {
+    grid.innerHTML = `
+      <div class="col-span-full bg-white rounded-2xl border border-slate-200 py-10 px-6 text-center">
+        <p class="text-sm text-slate-600">Tidak ada barang yang cocok dengan pencarian atau filter stok.</p>
+      </div>
+    `;
+    return;
+  }
+
+  grid.innerHTML = filtered
     .map((p) => {
       const rop = calculateROP(p);
       const needsRestock = p.stock <= rop;

@@ -336,6 +336,13 @@ function wireStaticListeners() {
   });
 
   // Tab 2: Stock
+  const refreshStockViews = () => {
+    renderStockCards(ctx);
+    renderSisaStock(ctx);
+  };
+  document.getElementById('stock-search-input')?.addEventListener('input', refreshStockViews);
+  document.getElementById('stock-status-filter')?.addEventListener('change', refreshStockViews);
+
   document.getElementById('stock-cards-grid')?.addEventListener('click', (event) => {
     const target = event.target instanceof Element ? event.target.closest('[data-action]') : null;
     if (!target) return;
