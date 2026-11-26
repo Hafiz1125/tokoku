@@ -3,6 +3,7 @@ import {
   getAuthToken,
   getCurrentUser,
   initAuthScreen,
+  restoreAuthSession,
   saveStoreToServer
 } from './js/auth.js';
 import { BADGE_DEFINITIONS, getDefaultState } from './js/constants.js';
@@ -405,9 +406,40 @@ function wireStaticListeners() {
   document.getElementById('edit-today-income-btn')?.addEventListener('click', () => openEditTodayIncomeModal(ctx));
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   wireStaticListeners();
-  showAuthScreen();
+
+  const applyAuthenticatedSession = ({ user, storeState }, { isRestored = false } = {}) => {
+    appState = normalizeState(storeState);
+    ctx.appState = appState;
+    Object.keys(posCart).forEach((k) => delete posCart[k]);
+    const rolledOver = archiveAndRolloverIfMidnight(appState);
+    showAppShell();
+    if (rolledOver) {
+      persistAndRefresh();
+      showToast(
+        `Pergantian hari pukul 00:00 — Memulai Hari #${appState.dailySession.dayNumber}!`,
+        'info'
+      );
+    } else {
+      updateHeaderAndGamificationUI(appState, user);
+      if (!isRestored) {
+        showToast(`Selamat datang, ${user.ownerName}!`, 'success');
+      }
+    }
+    switchTab(activeTab || 'produk');
+  };
+
+  authController = initAuthScreen({
+    onAuthenticated: (payload) => applyAuthenticatedSession(payload, { isRestored: false })
+  });
+
+  const restored = await restoreAuthSession();
+  if (restored) {
+    applyAuthenticatedSession(restored, { isRestored: true });
+  } else {
+    showAuthScreen();
+  }
 
   updateRealtimeClockAndShiftUI(appState);
   window.setInterval(() => {
@@ -419,21 +451,9 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }, 1000);
 
-  authController = initAuthScreen({
-    onAuthenticated: ({ user, storeState }) => {
-      appState = normalizeState(storeState);
-      ctx.appState = appState;
-      Object.keys(posCart).forEach((k) => delete posCart[k]);
-      const rolledOver = archiveAndRolloverIfMidnight(appState);
-      showAppShell();
-      if (rolledOver) {
-        persistAndRefresh();
-        showToast(`Selamat datang, ${user.ownerName}! Pergantian hari pukul 00:00 memulai Hari #${appState.dailySession.dayNumber}.`, 'info');
-      } else {
-        updateHeaderAndGamificationUI(appState, user);
-        showToast(`Selamat datang, ${user.ownerName}!`, 'success');
-      }
-      switchTab('produk');
+  window.addEventListener('pagehide', () => {
+    if (getAuthToken()) {
+      saveStoreToServer(appState, { keepalive: true }).catch(() => {});
     }
   });
 });

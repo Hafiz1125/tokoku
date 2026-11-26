@@ -17,10 +17,33 @@ if (!DB_FILE.startsWith(DATA_DIR + path.sep)) {
   throw new Error('Invalid database path configuration.');
 }
 
-const SESSION_SECRET =
-  process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 16
-    ? process.env.SESSION_SECRET
-    : crypto.randomBytes(32).toString('hex');
+const SECRET_FILE = path.resolve(DATA_DIR, '.session-secret');
+
+function loadOrCreateSessionSecret(): string {
+  if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 16) {
+    return process.env.SESSION_SECRET;
+  }
+  try {
+    if (fs.existsSync(SECRET_FILE)) {
+      const existing = fs.readFileSync(SECRET_FILE, 'utf8').trim();
+      if (existing.length >= 32) return existing;
+    }
+  } catch {
+    // Fallback to generating a new secret below
+  }
+  const generated = crypto.randomBytes(32).toString('hex');
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(SECRET_FILE, generated, { encoding: 'utf8', mode: 0o600 });
+  } catch {
+    // Ignore write failure on read-only fs
+  }
+  return generated;
+}
+
+const SESSION_SECRET = loadOrCreateSessionSecret();
 
 interface UserRecord {
   id: string;

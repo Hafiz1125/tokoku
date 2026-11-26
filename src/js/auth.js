@@ -1,7 +1,28 @@
 import { escapeHTML } from './utils.js';
 
-// Token sesi disimpan strictly di memori JS (tidak di localStorage/sessionStorage)
-let authToken = null;
+const AUTH_TOKEN_STORAGE_KEY = 'tokoku_auth_token_v1';
+
+function readStoredToken() {
+  try {
+    return localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredToken(token) {
+  try {
+    if (token) {
+      localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+    } else {
+      localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage quota / privacy mode errors
+  }
+}
+
+let authToken = readStoredToken();
 let currentUser = null;
 
 export function getAuthToken() {
@@ -15,11 +36,13 @@ export function getCurrentUser() {
 export function setAuthSession(token, user) {
   authToken = token || null;
   currentUser = user || null;
+  writeStoredToken(authToken);
 }
 
 export function clearAuthSession() {
   authToken = null;
   currentUser = null;
+  writeStoredToken(null);
 }
 
 async function apiRequest(url, options = {}) {
@@ -47,6 +70,22 @@ export async function fetchAuthStatus() {
   return apiRequest('/api/auth/status', { method: 'GET' });
 }
 
+export async function restoreAuthSession() {
+  const stored = readStoredToken();
+  if (!stored) return null;
+  authToken = stored;
+  try {
+    const data = await apiRequest('/api/auth/me', { method: 'GET' });
+    if (data?.user && data?.storeState) {
+      currentUser = data.user;
+      return data;
+    }
+  } catch {
+    clearAuthSession();
+  }
+  return null;
+}
+
 export async function loginUser({ username, password }) {
   const data = await apiRequest('/api/auth/login', {
     method: 'POST',
@@ -65,10 +104,11 @@ export async function registerUser({ username, password, ownerName, storeName })
   return data;
 }
 
-export async function saveStoreToServer(storeState) {
+export async function saveStoreToServer(storeState, { keepalive = false } = {}) {
   if (!authToken) return null;
   const data = await apiRequest('/api/store', {
     method: 'PUT',
+    keepalive,
     body: JSON.stringify({ storeState })
   });
   if (data.user) {
