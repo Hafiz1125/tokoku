@@ -2,11 +2,11 @@ import { BADGE_DEFINITIONS } from './constants.js';
 import { renderIcon } from './icons.js';
 import {
   escapeHTML,
-  formatDurationHMS,
   formatRealtimeClock,
   formatRealtimeDate,
   formatRupiah,
   getLevelInfo,
+  getLocalDateKey,
   getLocalTimezoneCode
 } from './utils.js';
 
@@ -175,6 +175,7 @@ export function updateRealtimeClockAndShiftUI(appState) {
   const nowClock = formatRealtimeClock(now);
   const nowDate = formatRealtimeDate(now);
   const tz = getLocalTimezoneCode(now);
+  const todayKey = getLocalDateKey(now);
 
   const headerClockEl = document.getElementById('header-realtime-clock');
   if (headerClockEl) headerClockEl.textContent = `${nowClock} ${tz}`;
@@ -185,25 +186,14 @@ export function updateRealtimeClockAndShiftUI(appState) {
   const session = appState?.dailySession;
   if (!session) return;
 
-  const openedTimestamp = Number.isFinite(Number(session.openedTimestamp))
-    ? Number(session.openedTimestamp)
-    : null;
-  const closedTimestamp = Number.isFinite(Number(session.closedTimestamp))
-    ? Number(session.closedTimestamp)
-    : null;
-
-  const elapsedMs =
-    session.isOpen && openedTimestamp !== null
-      ? Math.max(0, now.getTime() - openedTimestamp)
-      : !session.isOpen && openedTimestamp !== null && closedTimestamp !== null
-        ? Math.max(0, closedTimestamp - openedTimestamp)
-        : null;
-  const durationText = elapsedMs !== null ? formatDurationHMS(elapsedMs) : '';
+  const isSameDay = !session.dateKey || session.dateKey === todayKey;
 
   const shiftLabel = document.getElementById('store-shift-label');
   if (shiftLabel) {
     if (session.isOpen) {
       shiftLabel.textContent = `Hari #${session.dayNumber} · Buka`;
+    } else if (isSameDay) {
+      shiftLabel.textContent = `Hari #${session.dayNumber} · Tutup (Buka Lagi)`;
     } else {
       shiftLabel.textContent = 'Toko Tutup · Buka Hari Baru';
     }
@@ -212,30 +202,22 @@ export function updateRealtimeClockAndShiftUI(appState) {
   const posShiftHint = document.getElementById('pos-shift-hint');
   if (posShiftHint) {
     posShiftHint.textContent = session.isOpen
-      ? `Sesi Hari #${session.dayNumber} Aktif · Buka ${session.openedAt} ${tz}${durationText ? ` (${durationText})` : ''}`
+      ? `Sesi Hari #${session.dayNumber} Aktif · Buka ${session.openedAt} ${tz}`
       : `Toko Tutup pukul ${session.closedAt || '-'} ${tz}`;
   }
 
   const openedInfo = document.getElementById('shift-opened-info');
   if (openedInfo) {
     if (session.isOpen) {
-      openedInfo.textContent = `Dibuka pukul ${session.openedAt} ${tz} · Sekarang ${nowClock} ${tz}${
-        durationText ? ` · Berjalan ${durationText}` : ''
-      } · Kas Awal: ${formatRupiah(session.openingCash)}`;
+      const reopenedPart = session.reopenedAt ? ` (Buka kembali ${session.reopenedAt})` : '';
+      openedInfo.textContent = `Dibuka pukul ${session.openedAt} ${tz}${reopenedPart} · Sekarang ${nowClock} ${tz} · Kas Awal: ${formatRupiah(session.openingCash)}`;
     } else {
-      openedInfo.textContent = `Dibuka ${session.openedAt} · Ditutup ${session.closedAt || '-'} ${tz}${
-        durationText ? ` · Durasi ${durationText}` : ''
-      } · Sekarang ${nowClock} ${tz}`;
+      openedInfo.textContent = `Dibuka ${session.openedAt} · Ditutup ${session.closedAt || '-'} ${tz} · Sekarang ${nowClock} ${tz}`;
     }
   }
 
   const modalClockEl = document.getElementById('modal-realtime-clock');
   if (modalClockEl) modalClockEl.textContent = `${nowClock} ${tz}`;
-
-  const modalDurationEl = document.getElementById('modal-realtime-duration');
-  if (modalDurationEl && durationText) {
-    modalDurationEl.textContent = durationText;
-  }
 }
 
 export function openBadgesAndProfileModal(ctx) {

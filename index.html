@@ -745,7 +745,7 @@
                 </select>
               </div>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
+            <div id="monthly-summary-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
               <div class="border-r-0 sm:border-r border-teal-700/80 sm:pr-4">
                 <span class="text-xs text-teal-100 font-medium block">Total Pemasukan Bulan Ini</span>
                 <strong
@@ -756,15 +756,31 @@
                   Gabungan pemasukan harian (termasuk penyesuaian +/-)
                 </span>
               </div>
-              <div class="border-r-0 lg:border-r border-teal-700/80 lg:pr-4">
-                <span class="text-xs text-teal-100 font-medium block">Total Belanja Restock</span>
-                <strong
-                  id="monthly-total-restock"
-                  class="text-xl sm:text-2xl font-extrabold font-mono tabular-nums text-amber-200 mt-1 block"
-                >Rp 0</strong>
-                <span id="monthly-restock-note" class="text-xs text-teal-200">Total modal belanja stok semua hari</span>
+              <div class="border-r-0 lg:border-r border-teal-700/80 lg:pr-4 flex flex-col justify-between">
+                <div>
+                  <span id="monthly-restock-label" class="text-xs text-teal-100 font-medium block">
+                    Belanja Restock Hari Ini
+                  </span>
+                  <strong
+                    id="monthly-total-restock"
+                    class="text-xl sm:text-2xl font-extrabold font-mono tabular-nums text-amber-200 mt-1 block"
+                  >Rp 0</strong>
+                  <span id="monthly-restock-note" class="text-xs text-teal-200 block">Modal belanja stok hari aktif</span>
+                </div>
+                <div id="monthly-all-days-restock-wrap" class="mt-2.5 pt-2 border-t border-teal-700/70">
+                  <div class="flex items-baseline justify-between gap-2">
+                    <span class="text-[11px] text-teal-200 font-medium">Total Semua Hari</span>
+                    <strong
+                      id="monthly-all-days-restock"
+                      class="text-xs font-extrabold font-mono tabular-nums text-amber-100"
+                    >Rp 0</strong>
+                  </div>
+                  <span id="monthly-all-days-restock-note" class="text-[11px] text-teal-200/90 block">
+                    0 item &middot; 0 unit
+                  </span>
+                </div>
               </div>
-              <div class="border-r-0 sm:border-r border-teal-700/80 sm:pr-4 flex flex-col justify-between">
+              <div id="monthly-expense-card" class="border-r-0 sm:border-r border-teal-700/80 sm:pr-4 flex flex-col justify-between">
                 <div>
                   <span id="monthly-expense-label" class="text-xs text-amber-200 font-semibold block">
                     Uang Keluar Hari Ini
@@ -859,7 +875,9 @@
                 </p>
               </div>
               <div class="text-left sm:text-right">
-                <span class="text-[11px] font-medium text-slate-500 block">Total Keseluruhan Restock</span>
+                <span id="restock-breakdown-total-label" class="text-[11px] font-medium text-slate-500 block">
+                  Total Keseluruhan Restock
+                </span>
                 <strong id="restock-breakdown-grand-total" class="text-base font-extrabold font-mono tabular-nums text-amber-700">
                   Rp 0
                 </strong>

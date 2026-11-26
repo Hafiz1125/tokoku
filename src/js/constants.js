@@ -1,4 +1,4 @@
-import { formatRealtimeClock } from './utils.js';
+import { formatRealtimeClock, getLocalDateKey } from './utils.js';
 
 export const STORAGE_KEY = 'tokoku_app_state_v2';
 
@@ -84,8 +84,10 @@ export function getDefaultState() {
     dailySession: {
       isOpen: true,
       dayNumber: 1,
+      dateKey: getLocalDateKey(now),
       openedAt: formatRealtimeClock(now),
       openedTimestamp: now.getTime(),
+      reopenedAt: null,
       openingCash: 0,
       closedAt: null,
       closedTimestamp: null

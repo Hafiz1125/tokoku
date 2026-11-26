@@ -4,10 +4,10 @@ import { closeModal, openModal, showToast, updateRealtimeClockAndShiftUI } from 
 import {
   downloadFile,
   escapeHTML,
-  formatDurationHMS,
   formatRealtimeClock,
   formatRealtimeDate,
   formatRupiah,
+  getLocalDateKey,
   getLocalTimezoneCode
 } from '../utils.js';
 
@@ -49,8 +49,25 @@ export function renderDailyTransactions(ctx) {
   const dayFilterEl = document.getElementById('laporan-day-filter');
 
   const dayNumbers = new Set([session.dayNumber]);
-  appState.transactions.forEach((t) => dayNumbers.add(t.dayNumber || 1));
-  appState.dailyHistoryArchive.forEach((a) => dayNumbers.add(a.dayNumber));
+  const dayDateMap = new Map();
+  appState.transactions.forEach((t) => {
+    const d = t.dayNumber || 1;
+    dayNumbers.add(d);
+    if (t.date && !dayDateMap.has(d)) dayDateMap.set(d, t.date);
+  });
+  appState.dailyHistoryArchive.forEach((a) => {
+    dayNumbers.add(a.dayNumber);
+    if (a.date && !dayDateMap.has(a.dayNumber)) dayDateMap.set(a.dayNumber, a.date);
+  });
+  if (session.dateKey && !dayDateMap.has(session.dayNumber)) {
+    const parsed = new Date(`${session.dateKey}T12:00:00`);
+    if (!Number.isNaN(parsed.getTime())) {
+      dayDateMap.set(
+        session.dayNumber,
+        parsed.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+      );
+    }
+  }
   if (appState.dailyAdjustments && typeof appState.dailyAdjustments === 'object') {
     Object.keys(appState.dailyAdjustments).forEach((k) => {
       const n = Number(k);
@@ -62,13 +79,17 @@ export function renderDailyTransactions(ctx) {
 
   if (dayFilterEl instanceof HTMLSelectElement) {
     const prevVal = dayFilterEl.value || 'CURRENT';
+    const currentDateLabel = dayDateMap.get(session.dayNumber);
 
     dayFilterEl.innerHTML = `
-      <option value="CURRENT">Hari #${session.dayNumber} (Aktif)</option>
+      <option value="CURRENT">Hari #${session.dayNumber} (Aktif${currentDateLabel ? ` · ${currentDateLabel}` : ''})</option>
       <option value="ALL">Semua Hari (Gabungan Bulanan)</option>
       ${sortedDaysDesc
         .filter((d) => d !== session.dayNumber)
-        .map((d) => `<option value="${d}">Riwayat Hari #${d}</option>`)
+        .map((d) => {
+          const dt = dayDateMap.get(d);
+          return `<option value="${d}">Riwayat Hari #${d}${dt ? ` · ${dt}` : ''}</option>`;
+        })
         .join('')}
     `;
     if ([...dayFilterEl.options].some((o) => o.value === prevVal)) {
@@ -106,9 +127,12 @@ export function renderDailyTransactions(ctx) {
         'inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm font-bold bg-slate-900 hover:bg-slate-800 text-white transition cursor-pointer whitespace-nowrap';
       actionBtn.innerHTML = `${renderIcon('moon', 'w-4 h-4 text-amber-400')}<span>Rekap &amp; Tutup Toko</span>`;
     } else {
+      const isSameDay = !session.dateKey || session.dateKey === getLocalDateKey();
       actionBtn.className =
         'inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm font-bold bg-teal-700 hover:bg-teal-800 text-white transition cursor-pointer whitespace-nowrap';
-      actionBtn.innerHTML = `${renderIcon('sun', 'w-4 h-4 text-amber-300')}<span>Buka Toko Hari Baru</span>`;
+      actionBtn.innerHTML = `${renderIcon('sun', 'w-4 h-4 text-amber-300')}<span>${
+        isSameDay ? `Buka Kembali Hari #${session.dayNumber}` : 'Buka Toko Hari Baru'
+      }</span>`;
     }
   }
 
@@ -146,8 +170,6 @@ export function renderDailyTransactions(ctx) {
   const daysBadge = document.getElementById('monthly-days-badge');
   const mSales = document.getElementById('monthly-total-sales');
   const mSalesNote = document.getElementById('monthly-total-sales-note');
-  const mRestock = document.getElementById('monthly-total-restock');
-  const mRestockNote = document.getElementById('monthly-restock-note');
   if (daysBadge) daysBadge.textContent = `Total ${recordedDays.size} Hari Tercatat`;
   if (mSales) {
     mSales.textContent = formatRupiah(monthlyNetIncome);
@@ -166,19 +188,16 @@ export function renderDailyTransactions(ctx) {
       mSalesNote.textContent = 'Gabungan pemasukan harian dari Hari #1 s/d sekarang';
     }
   }
-  if (mRestock) mRestock.textContent = formatRupiah(monthlyRestock);
-  if (mRestockNote) {
-    mRestockNote.textContent =
-      monthlyRestockItems.size > 0
-        ? `${monthlyRestockItems.size} item · ${monthlyRestockQty} unit masuk (Grosir/Sales)`
-        : 'Total belanja restock semua hari';
-  }
 
   const monthlyDaySelect = document.getElementById('monthly-day-select');
   if (monthlyDaySelect instanceof HTMLSelectElement) {
     const dayOptions = sortedDaysAsc.map((d) => {
       const val = d === session.dayNumber ? 'CURRENT' : String(d);
-      const label = d === session.dayNumber ? `Hari #${d} (Aktif)` : `Hari #${d}`;
+      const dt = dayDateMap.get(d);
+      const label =
+        d === session.dayNumber
+          ? `Hari #${d} (Aktif${dt ? ` · ${dt}` : ''})`
+          : `Hari #${d}${dt ? ` · ${dt}` : ''}`;
       return `<option value="${val}">${label}</option>`;
     });
     dayOptions.push('<option value="ALL">Semua Hari</option>');
@@ -197,11 +216,20 @@ export function renderDailyTransactions(ctx) {
       : Number(selectedFilter) || session.dayNumber;
 
   let selectedMonthlyDaySales = 0;
+  let selectedDayRestock = 0;
+  let selectedDayRestockQty = 0;
+  const selectedDayRestockItems = new Set();
+
   appState.transactions
     .filter((t) => (t.dayNumber || 1) === selectedMonthlyDay)
     .forEach((trx) => {
       if (trx.type === 'SALE') {
         selectedMonthlyDaySales += trx.amount;
+      } else if (trx.type === 'RESTOCK') {
+        selectedDayRestock += Number(trx.amount) || 0;
+        const info = parseRestockItemInfo(trx, appState.products);
+        selectedDayRestockQty += info.qty;
+        selectedDayRestockItems.add(info.key);
       }
     });
 
@@ -223,6 +251,59 @@ export function renderDailyTransactions(ctx) {
   const todayAdj = appState.dailyAdjustments?.[dayKey];
   const todayExpense = Number(todayAdj?.expense) || 0;
   const netTodayIncome = selectedMonthlyDaySales - todayExpense;
+
+  const isAllDays = selectedFilter === 'ALL';
+  const mRestockLabel = document.getElementById('monthly-restock-label');
+  const mRestock = document.getElementById('monthly-total-restock');
+  const mRestockNote = document.getElementById('monthly-restock-note');
+  const mAllRestockWrap = document.getElementById('monthly-all-days-restock-wrap');
+  const mAllRestock = document.getElementById('monthly-all-days-restock');
+  const mAllRestockNote = document.getElementById('monthly-all-days-restock-note');
+
+  if (isAllDays) {
+    if (mRestockLabel) mRestockLabel.textContent = 'Total Belanja Restock (Semua Hari)';
+    if (mRestock) mRestock.textContent = formatRupiah(monthlyRestock);
+    if (mRestockNote) {
+      mRestockNote.textContent =
+        monthlyRestockItems.size > 0
+          ? `${monthlyRestockItems.size} item · ${monthlyRestockQty} unit masuk (Semua hari)`
+          : 'Belum ada belanja restock';
+    }
+    if (mAllRestockWrap) mAllRestockWrap.classList.add('hidden');
+  } else {
+    if (mRestockLabel) {
+      mRestockLabel.textContent =
+        selectedMonthlyDay === session.dayNumber
+          ? `Belanja Restock Hari #${selectedMonthlyDay} (Aktif)`
+          : `Belanja Restock Hari #${selectedMonthlyDay}`;
+    }
+    if (mRestock) mRestock.textContent = formatRupiah(selectedDayRestock);
+    if (mRestockNote) {
+      mRestockNote.textContent =
+        selectedDayRestockItems.size > 0
+          ? `${selectedDayRestockItems.size} item · ${selectedDayRestockQty} unit masuk Hari #${selectedMonthlyDay}`
+          : `Belum ada restock pada Hari #${selectedMonthlyDay}`;
+    }
+    if (mAllRestockWrap) mAllRestockWrap.classList.remove('hidden');
+    if (mAllRestock) mAllRestock.textContent = formatRupiah(monthlyRestock);
+    if (mAllRestockNote) {
+      mAllRestockNote.textContent =
+        monthlyRestockItems.size > 0
+          ? `${monthlyRestockItems.size} item · ${monthlyRestockQty} unit (Grosir/Sales)`
+          : 'Belum ada belanja restock';
+    }
+  }
+  const monthlyGrid = document.getElementById('monthly-summary-grid');
+  const expenseCard = document.getElementById('monthly-expense-card');
+  if (monthlyGrid) {
+    monthlyGrid.className = isAllDays
+      ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-4'
+      : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4';
+  }
+  if (expenseCard) {
+    expenseCard.classList.toggle('hidden', isAllDays);
+    expenseCard.classList.toggle('flex', !isAllDays);
+  }
 
   const mExpenseLabel = document.getElementById('monthly-expense-label');
   const mExpense = document.getElementById('monthly-today-expense');
@@ -356,6 +437,12 @@ export function renderDailyTransactions(ctx) {
       }
     });
 
+  const restockTotalLabelEl = document.getElementById('restock-breakdown-total-label');
+  if (restockTotalLabelEl) {
+    restockTotalLabelEl.textContent = isAllSelected
+      ? 'Total Restock Semua Hari'
+      : `Total Restock Hari #${selectedMonthlyDay}`;
+  }
   if (restockSubtitleEl) {
     restockSubtitleEl.textContent = `Rekap per barang untuk ${activeDayLabel} (Grosir/Sales)`;
   }
@@ -486,10 +573,6 @@ export function renderDailyTransactions(ctx) {
             typeof arc.totalSales === 'number'
               ? ` &middot; Omzet: ${formatRupiah(arc.totalSales)} &middot; Laba: ${formatRupiah(arc.totalProfit || 0)}`
               : '';
-          const arcDuration =
-            Number.isFinite(Number(arc.openedTimestamp)) && Number.isFinite(Number(arc.closedTimestamp))
-              ? ` · Durasi ${formatDurationHMS(Number(arc.closedTimestamp) - Number(arc.openedTimestamp))}`
-              : '';
           const arcTz = escapeHTML(arc.timezone || getLocalTimezoneCode());
           return `
             <div class="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm">
@@ -499,7 +582,7 @@ export function renderDailyTransactions(ctx) {
                   <span aria-hidden="true" class="text-slate-300">&middot;</span>
                   <span class="text-slate-600 font-mono tabular-nums">Buka ${escapeHTML(arc.openedAt)} &ndash; Tutup ${escapeHTML(
                     arc.closedAt
-                  )} ${arcTz}${escapeHTML(arcDuration)}</span>
+                  )} ${arcTz}</span>
                 </div>
                 <p class="text-xs text-slate-600 mt-1 font-mono tabular-nums">
                   ${arc.transactionCount} transaksi &middot; Kas Awal: ${formatRupiah(arc.openingCash)}${salesInfo}
@@ -588,10 +671,6 @@ export function openDailyClosingModal(ctx) {
 
   const now = new Date();
   const tz = getLocalTimezoneCode(now);
-  const hasOpenedTimestamp = Number.isFinite(Number(session.openedTimestamp));
-  const initialDuration = hasOpenedTimestamp
-    ? formatDurationHMS(now.getTime() - Number(session.openedTimestamp))
-    : '-';
 
   const bodyHTML = `
     <div class="space-y-3">
@@ -610,17 +689,6 @@ export function openDailyClosingModal(ctx) {
             formatRealtimeClock(now)
           )} ${escapeHTML(tz)}</strong>
         </div>
-        ${
-          hasOpenedTimestamp
-            ? `
-        <div class="flex justify-between">
-          <span class="text-slate-600">Durasi Operasional:</span>
-          <strong id="modal-realtime-duration" class="font-mono tabular-nums text-slate-900">${escapeHTML(
-            initialDuration
-          )}</strong>
-        </div>`
-            : ''
-        }
         <div class="flex justify-between">
           <span class="text-slate-600">Kas Awal Saat Buka Toko:</span>
           <strong class="font-mono tabular-nums text-slate-900">${formatRupiah(session.openingCash)}</strong>
@@ -644,7 +712,7 @@ export function openDailyClosingModal(ctx) {
         </div>
       </div>
       <p class="text-xs text-slate-500">
-        Menutup toko akan mengarsipkan laporan hari ini dan mengunci kasir hingga Anda membuka toko pada hari berikutnya.
+        Jika toko dibuka kembali sebelum pukul 00:00 (hari yang sama), transaksi tetap melanjutkan Hari #${session.dayNumber}. Reset ke hari baru otomatis berlaku setiap pergantian pukul 00:00.
       </p>
     </div>
   `;
@@ -674,34 +742,18 @@ export function openDailyClosingModal(ctx) {
         appState.dailySession.isOpen = false;
         appState.dailySession.closedAt = nowStr;
         appState.dailySession.closedTimestamp = closeTs;
+        if (!appState.dailySession.dateKey) {
+          appState.dailySession.dateKey = getLocalDateKey(closeNow);
+        }
 
-        const dayTransactions = appState.transactions.filter((t) => (t.dayNumber || 1) === currentDay);
-        let daySales = 0;
-        let dayRestock = 0;
-        let dayProfit = 0;
-        dayTransactions.forEach((t) => {
-          if (t.type === 'SALE') {
-            daySales += t.amount;
-            dayProfit += t.profit;
-          } else if (t.type === 'RESTOCK') {
-            dayRestock += t.amount;
-          }
-        });
-
-        appState.dailyHistoryArchive.unshift({
-          dayNumber: currentDay,
+        upsertDayArchive(appState, currentDay, {
           openedAt: appState.dailySession.openedAt,
           openedTimestamp: appState.dailySession.openedTimestamp || null,
           closedAt: nowStr,
           closedTimestamp: closeTs,
           timezone: closeTz,
           openingCash: appState.dailySession.openingCash,
-          closingCash: appState.storeProfile.cashBalance,
-          totalSales: daySales,
-          totalRestock: dayRestock,
-          totalProfit: dayProfit,
-          dailyExpense: Number(appState.dailyAdjustments?.[String(currentDay)]?.expense) || 0,
-          transactionCount: dayTransactions.length
+          closingCash: appState.storeProfile.cashBalance
         });
 
         closeModal();
@@ -712,23 +764,120 @@ export function openDailyClosingModal(ctx) {
   });
 }
 
+function upsertDayArchive(appState, dayNumber, meta) {
+  const dayTransactions = appState.transactions.filter((t) => (t.dayNumber || 1) === dayNumber);
+  let daySales = 0;
+  let dayRestock = 0;
+  let dayProfit = 0;
+  dayTransactions.forEach((t) => {
+    if (t.type === 'SALE') {
+      daySales += t.amount;
+      dayProfit += t.profit;
+    } else if (t.type === 'RESTOCK') {
+      dayRestock += t.amount;
+    }
+  });
+
+  const entry = {
+    dayNumber,
+    openedAt: meta.openedAt,
+    openedTimestamp: meta.openedTimestamp || null,
+    closedAt: meta.closedAt,
+    closedTimestamp: meta.closedTimestamp || null,
+    timezone: meta.timezone || getLocalTimezoneCode(),
+    openingCash: meta.openingCash,
+    closingCash: meta.closingCash,
+    totalSales: daySales,
+    totalRestock: dayRestock,
+    totalProfit: dayProfit,
+    dailyExpense: Number(appState.dailyAdjustments?.[String(dayNumber)]?.expense) || 0,
+    transactionCount: dayTransactions.length
+  };
+
+  if (!Array.isArray(appState.dailyHistoryArchive)) {
+    appState.dailyHistoryArchive = [];
+  }
+  const existingIdx = appState.dailyHistoryArchive.findIndex((a) => a.dayNumber === dayNumber);
+  if (existingIdx >= 0) {
+    appState.dailyHistoryArchive[existingIdx] = entry;
+  } else {
+    appState.dailyHistoryArchive.unshift(entry);
+  }
+}
+
+export function archiveAndRolloverIfMidnight(appState) {
+  const session = appState?.dailySession;
+  if (!session || !session.dateKey) return false;
+  const now = new Date();
+  const todayKey = getLocalDateKey(now);
+  if (!todayKey || session.dateKey === todayKey) return false;
+
+  if (!session.isOpen) {
+    // Store was closed on a previous calendar date; keep closed until owner opens the new day.
+    return false;
+  }
+
+  const prevDay = session.dayNumber || 1;
+  const nextDay = prevDay + 1;
+  upsertDayArchive(appState, prevDay, {
+    openedAt: session.openedAt,
+    openedTimestamp: session.openedTimestamp || null,
+    closedAt: '23:59:59',
+    closedTimestamp: null,
+    timezone: getLocalTimezoneCode(now),
+    openingCash: session.openingCash,
+    closingCash: appState.storeProfile.cashBalance
+  });
+
+  appState.storeProfile.cashBalance = 0;
+  appState.dailySession = {
+    isOpen: true,
+    dayNumber: nextDay,
+    dateKey: todayKey,
+    openedAt: formatRealtimeClock(now),
+    openedTimestamp: now.getTime(),
+    reopenedAt: null,
+    openingCash: 0,
+    closedAt: null,
+    closedTimestamp: null
+  };
+  return true;
+}
+
 export function openStartNewDayModal(ctx) {
   const { appState, persistAndRefresh } = ctx;
-  const nextDay = (appState.dailySession?.dayNumber || 1) + 1;
   const now = new Date();
   const tz = getLocalTimezoneCode(now);
+  const todayKey = getLocalDateKey(now);
+  const currentSession = appState.dailySession || {};
+  const isSameDay = !currentSession.dateKey || currentSession.dateKey === todayKey;
+  const targetDay = isSameDay ? currentSession.dayNumber || 1 : (currentSession.dayNumber || 1) + 1;
 
   openModal({
-    title: `Buka Operasional Toko — Hari #${nextDay}`,
-    bodyHTML: `
-      <p>Anda akan memulai operasional <strong>Hari #${nextDay}</strong> untuk <strong>${escapeHTML(
-      appState.storeProfile.storeName
-    )}</strong>.</p>
+    title: isSameDay
+      ? `Buka Kembali Toko — Hari #${targetDay}`
+      : `Buka Operasional Toko — Hari #${targetDay}`,
+    bodyHTML: isSameDay
+      ? `
+      <p>Anda akan membuka kembali <strong>${escapeHTML(
+        appState.storeProfile.storeName
+      )}</strong> pada hari yang sama (<strong>Hari #${targetDay}</strong>).</p>
+      <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-1">
+        <div>Waktu Buka Kembali (Real-time): <strong id="modal-realtime-clock" class="font-mono tabular-nums text-teal-800">${escapeHTML(
+          formatRealtimeClock(now)
+        )} ${escapeHTML(tz)}</strong> <span class="text-emerald-800">(${escapeHTML(formatRealtimeDate(now))})</span></div>
+        <div>Transaksi, pengeluaran, dan saldo kas <strong>Hari #${targetDay}</strong> tetap dilanjutkan (reset hari otomatis pukul 00:00).</div>
+      </div>
+    `
+      : `
+      <p>Anda akan memulai operasional <strong>Hari #${targetDay}</strong> untuk <strong>${escapeHTML(
+        appState.storeProfile.storeName
+      )}</strong>.</p>
       <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-1">
         <div>Waktu Buka (Real-time): <strong id="modal-realtime-clock" class="font-mono tabular-nums text-teal-800">${escapeHTML(
           formatRealtimeClock(now)
         )} ${escapeHTML(tz)}</strong> <span class="text-emerald-800">(${escapeHTML(formatRealtimeDate(now))})</span></div>
-        <div>Saldo Kas Awal Laci: <strong class="font-mono tabular-nums">${formatRupiah(0)}</strong> (Direset ke 0 setiap buka toko)</div>
+        <div>Saldo Kas Awal Laci: <strong class="font-mono tabular-nums">${formatRupiah(0)}</strong> (Reset harian setiap pukul 00:00)</div>
         <div>Log transaksi harian baru akan tercatat mulai dari waktu sekarang.</div>
       </div>
     `,
@@ -737,29 +886,55 @@ export function openStartNewDayModal(ctx) {
         Batal
       </button>
       <button type="button" id="confirm-new-day-btn" class="px-4 py-2 min-h-[40px] rounded-xl text-sm font-bold bg-teal-700 hover:bg-teal-800 text-white cursor-pointer">
-        Buka Toko Hari #${nextDay}
+        ${isSameDay ? `Buka Kembali Hari #${targetDay}` : `Buka Toko Hari #${targetDay}`}
       </button>
     `,
     onMount: () => {
       document.getElementById('cancel-new-day-btn')?.addEventListener('click', closeModal);
       document.getElementById('confirm-new-day-btn')?.addEventListener('click', () => {
         const openNow = new Date();
-        appState.storeProfile.cashBalance = 0;
-        appState.dailySession = {
-          isOpen: true,
-          dayNumber: nextDay,
-          openedAt: formatRealtimeClock(openNow),
-          openedTimestamp: openNow.getTime(),
-          openingCash: 0,
-          closedAt: null,
-          closedTimestamp: null
-        };
-        closeModal();
-        persistAndRefresh();
-        showToast(
-          `Toko resmi dibuka Hari #${nextDay} pukul ${appState.dailySession.openedAt} ${getLocalTimezoneCode(openNow)}!`,
-          'success'
-        );
+        const openClock = formatRealtimeClock(openNow);
+        const openKey = getLocalDateKey(openNow);
+        const stillSameDay = !currentSession.dateKey || currentSession.dateKey === openKey;
+
+        if (stillSameDay) {
+          appState.dailySession = {
+            ...currentSession,
+            isOpen: true,
+            dayNumber: targetDay,
+            dateKey: openKey,
+            openedAt: currentSession.openedAt || openClock,
+            openedTimestamp: currentSession.openedTimestamp || openNow.getTime(),
+            reopenedAt: openClock,
+            closedAt: null,
+            closedTimestamp: null
+          };
+          closeModal();
+          persistAndRefresh();
+          showToast(
+            `Toko dibuka kembali pada Hari #${targetDay} pukul ${openClock} ${getLocalTimezoneCode(openNow)}!`,
+            'success'
+          );
+        } else {
+          appState.storeProfile.cashBalance = 0;
+          appState.dailySession = {
+            isOpen: true,
+            dayNumber: targetDay,
+            dateKey: openKey,
+            openedAt: openClock,
+            openedTimestamp: openNow.getTime(),
+            reopenedAt: null,
+            openingCash: 0,
+            closedAt: null,
+            closedTimestamp: null
+          };
+          closeModal();
+          persistAndRefresh();
+          showToast(
+            `Toko resmi dibuka Hari #${targetDay} pukul ${openClock} ${getLocalTimezoneCode(openNow)}!`,
+            'success'
+          );
+        }
       });
     }
   });

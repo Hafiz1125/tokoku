@@ -1,4 +1,5 @@
 import { STORAGE_KEY, getCategoryFallbackImage, getDefaultState } from './constants.js';
+import { getLocalDateKey } from './utils.js';
 
 export function normalizeState(candidate) {
   const defaults = getDefaultState();
@@ -20,26 +21,45 @@ export function normalizeState(candidate) {
       : defaults.storeProfile.cashBalance
   };
 
+  const rawDateKey = candidate.dailySession?.dateKey;
+  const validDateKey =
+    typeof rawDateKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDateKey)
+      ? rawDateKey
+      : getLocalDateKey();
+
+  const rawOpenedTs = candidate.dailySession?.openedTimestamp;
+  const openedTimestamp =
+    rawOpenedTs !== null && rawOpenedTs !== undefined && rawOpenedTs !== '' && Number(rawOpenedTs) > 0
+      ? Number(rawOpenedTs)
+      : null;
+
+  const rawClosedTs = candidate.dailySession?.closedTimestamp;
+  const closedTimestamp =
+    rawClosedTs !== null && rawClosedTs !== undefined && rawClosedTs !== '' && Number(rawClosedTs) > 0
+      ? Number(rawClosedTs)
+      : null;
+
   const dailySession = {
     isOpen:
       typeof candidate.dailySession?.isOpen === 'boolean'
         ? candidate.dailySession.isOpen
         : defaults.dailySession.isOpen,
     dayNumber: Math.max(1, parseInt(candidate.dailySession?.dayNumber || '1', 10) || 1),
+    dateKey: validDateKey,
     openedAt:
       typeof candidate.dailySession?.openedAt === 'string' && candidate.dailySession.openedAt
         ? candidate.dailySession.openedAt
         : defaults.dailySession.openedAt,
-    openedTimestamp: Number.isFinite(Number(candidate.dailySession?.openedTimestamp))
-      ? Number(candidate.dailySession.openedTimestamp)
-      : null,
+    openedTimestamp,
+    reopenedAt:
+      typeof candidate.dailySession?.reopenedAt === 'string' && candidate.dailySession.reopenedAt
+        ? candidate.dailySession.reopenedAt
+        : null,
     openingCash: Number.isFinite(Number(candidate.dailySession?.openingCash))
       ? Number(candidate.dailySession.openingCash)
       : storeProfile.cashBalance,
     closedAt: candidate.dailySession?.closedAt || null,
-    closedTimestamp: Number.isFinite(Number(candidate.dailySession?.closedTimestamp))
-      ? Number(candidate.dailySession.closedTimestamp)
-      : null
+    closedTimestamp
   };
 
   const gamification = {

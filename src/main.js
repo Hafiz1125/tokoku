@@ -16,6 +16,7 @@ import {
   updateCartQty
 } from './js/modules/harga.js';
 import {
+  archiveAndRolloverIfMidnight,
   exportTransactionsCSV,
   openBackupRestoreModal,
   openDailyClosingModal,
@@ -410,7 +411,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
   updateRealtimeClockAndShiftUI(appState);
   window.setInterval(() => {
-    updateRealtimeClockAndShiftUI(appState);
+    if (getAuthToken() && archiveAndRolloverIfMidnight(appState)) {
+      persistAndRefresh();
+      showToast(`Pergantian hari pukul 00:00 — Memulai Hari #${appState.dailySession.dayNumber}!`, 'info');
+    } else {
+      updateRealtimeClockAndShiftUI(appState);
+    }
   }, 1000);
 
   authController = initAuthScreen({
@@ -418,10 +424,16 @@ window.addEventListener('DOMContentLoaded', () => {
       appState = normalizeState(storeState);
       ctx.appState = appState;
       Object.keys(posCart).forEach((k) => delete posCart[k]);
+      const rolledOver = archiveAndRolloverIfMidnight(appState);
       showAppShell();
-      updateHeaderAndGamificationUI(appState, user);
+      if (rolledOver) {
+        persistAndRefresh();
+        showToast(`Selamat datang, ${user.ownerName}! Pergantian hari pukul 00:00 memulai Hari #${appState.dailySession.dayNumber}.`, 'info');
+      } else {
+        updateHeaderAndGamificationUI(appState, user);
+        showToast(`Selamat datang, ${user.ownerName}!`, 'success');
+      }
       switchTab('produk');
-      showToast(`Selamat datang, ${user.ownerName}!`, 'success');
     }
   });
 });
