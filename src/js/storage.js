@@ -30,10 +30,16 @@ export function normalizeState(candidate) {
       typeof candidate.dailySession?.openedAt === 'string' && candidate.dailySession.openedAt
         ? candidate.dailySession.openedAt
         : defaults.dailySession.openedAt,
+    openedTimestamp: Number.isFinite(Number(candidate.dailySession?.openedTimestamp))
+      ? Number(candidate.dailySession.openedTimestamp)
+      : null,
     openingCash: Number.isFinite(Number(candidate.dailySession?.openingCash))
       ? Number(candidate.dailySession.openingCash)
       : storeProfile.cashBalance,
-    closedAt: candidate.dailySession?.closedAt || null
+    closedAt: candidate.dailySession?.closedAt || null,
+    closedTimestamp: Number.isFinite(Number(candidate.dailySession?.closedTimestamp))
+      ? Number(candidate.dailySession.closedTimestamp)
+      : null
   };
 
   const gamification = {
@@ -66,11 +72,41 @@ export function normalizeState(candidate) {
   const dailyAdjustments = {};
   if (candidate.dailyAdjustments && typeof candidate.dailyAdjustments === 'object') {
     Object.entries(candidate.dailyAdjustments).forEach(([dayKey, adj]) => {
-      if (adj && typeof adj === 'object' && Number.isFinite(Number(adj.expense))) {
+      if (!adj || typeof adj !== 'object') return;
+      const rawItems = Array.isArray(adj.items) ? adj.items : [];
+      const items = rawItems
+        .filter((it) => it && typeof it === 'object' && Number.isFinite(Number(it.amount)))
+        .map((it, idx) => ({
+          id: typeof it.id === 'string' && it.id ? it.id : `EXP-${dayKey}-${idx + 1}`,
+          title:
+            typeof it.title === 'string' && it.title.trim()
+              ? it.title.trim().slice(0, 120)
+              : 'Pengeluaran Harian',
+          amount: Number(it.amount) || 0,
+          time: typeof it.time === 'string' ? it.time : ''
+        }));
+
+      let expense = Number.isFinite(Number(adj.expense)) ? Number(adj.expense) : 0;
+      if (items.length > 0) {
+        expense = items.reduce((sum, it) => sum + it.amount, 0);
+      } else if (expense !== 0) {
+        items.push({
+          id: `EXP-${dayKey}-LEGACY`,
+          title:
+            typeof adj.note === 'string' && adj.note.trim()
+              ? adj.note.trim().slice(0, 120)
+              : 'Pengeluaran Harian',
+          amount: expense,
+          time: typeof adj.updatedAt === 'string' ? adj.updatedAt : ''
+        });
+      }
+
+      if (items.length > 0 || expense !== 0) {
         dailyAdjustments[String(dayKey)] = {
-          expense: Number(adj.expense),
+          expense,
           note: typeof adj.note === 'string' ? adj.note.trim().slice(0, 120) : '',
-          updatedAt: typeof adj.updatedAt === 'string' ? adj.updatedAt : ''
+          updatedAt: typeof adj.updatedAt === 'string' ? adj.updatedAt : '',
+          items
         };
       }
     });

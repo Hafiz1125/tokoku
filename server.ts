@@ -32,7 +32,7 @@ interface UserRecord {
   passwordSalt: string;
   passwordHash: string;
   createdAt: string;
-  storeState: ReturnType<typeof getDefaultState>;
+  storeState: ReturnType<typeof normalizeState>;
 }
 
 interface UsersDatabase {

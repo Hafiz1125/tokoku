@@ -1,3 +1,5 @@
+import { formatRealtimeClock } from './utils.js';
+
 export const STORAGE_KEY = 'tokoku_app_state_v2';
 
 export const PRODUCT_CATEGORIES = [
@@ -72,6 +74,7 @@ export const BADGE_DEFINITIONS = [
 ];
 
 export function getDefaultState() {
+  const now = new Date();
   return {
     storeProfile: {
       storeName: 'Toko Kelontong Sejahtera',
@@ -81,9 +84,11 @@ export function getDefaultState() {
     dailySession: {
       isOpen: true,
       dayNumber: 1,
-      openedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+      openedAt: formatRealtimeClock(now),
+      openedTimestamp: now.getTime(),
       openingCash: 0,
-      closedAt: null
+      closedAt: null,
+      closedTimestamp: null
     },
     gamification: {
       xp: 50,

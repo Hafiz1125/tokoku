@@ -1,5 +1,5 @@
 import { getCategoryFallbackImage } from '../constants.js';
-import { showToast } from '../ui.js';
+import { showToast, updateRealtimeClockAndShiftUI } from '../ui.js';
 import { escapeHTML, formatRupiah } from '../utils.js';
 
 export function renderPOSProducts(ctx) {
@@ -7,12 +7,10 @@ export function renderPOSProducts(ctx) {
   const grid = document.getElementById('pos-products-grid');
   const shiftHint = document.getElementById('pos-shift-hint');
   if (shiftHint) {
-    shiftHint.textContent = appState.dailySession.isOpen
-      ? `Sesi Hari #${appState.dailySession.dayNumber} Aktif`
-      : 'Toko Sedang Tutup';
     shiftHint.className = appState.dailySession.isOpen
       ? 'text-xs font-semibold text-emerald-700'
       : 'text-xs font-semibold text-rose-700';
+    updateRealtimeClockAndShiftUI(appState);
   }
   if (!grid) return;
 

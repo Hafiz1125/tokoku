@@ -1,6 +1,14 @@
 import { BADGE_DEFINITIONS } from './constants.js';
 import { renderIcon } from './icons.js';
-import { escapeHTML, formatRupiah, getLevelInfo } from './utils.js';
+import {
+  escapeHTML,
+  formatDurationHMS,
+  formatRealtimeClock,
+  formatRealtimeDate,
+  formatRupiah,
+  getLevelInfo,
+  getLocalTimezoneCode
+} from './utils.js';
 
 let activeModalCleanup = null;
 
@@ -147,19 +155,86 @@ export function updateHeaderAndGamificationUI(appState, currentUser = null) {
 
   const shiftBtn = document.getElementById('store-shift-btn');
   const shiftIcon = document.getElementById('store-shift-icon');
-  const shiftLabel = document.getElementById('store-shift-label');
-  if (shiftBtn && shiftIcon && shiftLabel && appState.dailySession) {
+  if (shiftBtn && shiftIcon && appState.dailySession) {
     if (appState.dailySession.isOpen) {
       shiftBtn.className =
         'px-4 py-2 min-h-[40px] rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition cursor-pointer whitespace-nowrap shrink-0 bg-teal-700 hover:bg-teal-800 text-white';
       shiftIcon.innerHTML = renderIcon('sun', 'w-4 h-4 text-amber-300');
-      shiftLabel.textContent = `Hari #${appState.dailySession.dayNumber} · Buka`;
     } else {
       shiftBtn.className =
         'px-4 py-2 min-h-[40px] rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition cursor-pointer whitespace-nowrap shrink-0 bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700';
       shiftIcon.innerHTML = renderIcon('lock', 'w-4 h-4 text-rose-400');
+    }
+  }
+
+  updateRealtimeClockAndShiftUI(appState);
+}
+
+export function updateRealtimeClockAndShiftUI(appState) {
+  const now = new Date();
+  const nowClock = formatRealtimeClock(now);
+  const nowDate = formatRealtimeDate(now);
+  const tz = getLocalTimezoneCode(now);
+
+  const headerClockEl = document.getElementById('header-realtime-clock');
+  if (headerClockEl) headerClockEl.textContent = `${nowClock} ${tz}`;
+
+  const headerDateEl = document.getElementById('header-realtime-date');
+  if (headerDateEl) headerDateEl.textContent = nowDate;
+
+  const session = appState?.dailySession;
+  if (!session) return;
+
+  const openedTimestamp = Number.isFinite(Number(session.openedTimestamp))
+    ? Number(session.openedTimestamp)
+    : null;
+  const closedTimestamp = Number.isFinite(Number(session.closedTimestamp))
+    ? Number(session.closedTimestamp)
+    : null;
+
+  const elapsedMs =
+    session.isOpen && openedTimestamp !== null
+      ? Math.max(0, now.getTime() - openedTimestamp)
+      : !session.isOpen && openedTimestamp !== null && closedTimestamp !== null
+        ? Math.max(0, closedTimestamp - openedTimestamp)
+        : null;
+  const durationText = elapsedMs !== null ? formatDurationHMS(elapsedMs) : '';
+
+  const shiftLabel = document.getElementById('store-shift-label');
+  if (shiftLabel) {
+    if (session.isOpen) {
+      shiftLabel.textContent = `Hari #${session.dayNumber} · Buka`;
+    } else {
       shiftLabel.textContent = 'Toko Tutup · Buka Hari Baru';
     }
+  }
+
+  const posShiftHint = document.getElementById('pos-shift-hint');
+  if (posShiftHint) {
+    posShiftHint.textContent = session.isOpen
+      ? `Sesi Hari #${session.dayNumber} Aktif · Buka ${session.openedAt} ${tz}${durationText ? ` (${durationText})` : ''}`
+      : `Toko Tutup pukul ${session.closedAt || '-'} ${tz}`;
+  }
+
+  const openedInfo = document.getElementById('shift-opened-info');
+  if (openedInfo) {
+    if (session.isOpen) {
+      openedInfo.textContent = `Dibuka pukul ${session.openedAt} ${tz} · Sekarang ${nowClock} ${tz}${
+        durationText ? ` · Berjalan ${durationText}` : ''
+      } · Kas Awal: ${formatRupiah(session.openingCash)}`;
+    } else {
+      openedInfo.textContent = `Dibuka ${session.openedAt} · Ditutup ${session.closedAt || '-'} ${tz}${
+        durationText ? ` · Durasi ${durationText}` : ''
+      } · Sekarang ${nowClock} ${tz}`;
+    }
+  }
+
+  const modalClockEl = document.getElementById('modal-realtime-clock');
+  if (modalClockEl) modalClockEl.textContent = `${nowClock} ${tz}`;
+
+  const modalDurationEl = document.getElementById('modal-realtime-duration');
+  if (modalDurationEl && durationText) {
+    modalDurationEl.textContent = durationText;
   }
 }
 

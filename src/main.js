@@ -29,7 +29,7 @@ import {
   renderProductsGrid
 } from './js/modules/produk.js';
 import { openAuditStockModal, renderSisaStock } from './js/modules/sisa.js';
-import { executeRestock, renderStockCards } from './js/modules/stock.js';
+import { executeRestock, renderStockCards, updateRestockSubtotal } from './js/modules/stock.js';
 import { normalizeState } from './js/storage.js';
 import {
   closeModal,
@@ -37,7 +37,8 @@ import {
   openBadgesAndProfileModal,
   openModal,
   showToast,
-  updateHeaderAndGamificationUI
+  updateHeaderAndGamificationUI,
+  updateRealtimeClockAndShiftUI
 } from './js/ui.js';
 import { getLevelInfo } from './js/utils.js';
 
@@ -93,7 +94,18 @@ function replaceState(nextState) {
   persistAndRefresh();
 }
 
-function recordDailyTransaction({ type, summary, amount, profit, discountPercent, paymentMethod }) {
+function recordDailyTransaction({
+  type,
+  summary,
+  amount,
+  profit,
+  discountPercent,
+  paymentMethod,
+  productId,
+  productName,
+  qty,
+  unitPrice
+}) {
   const now = new Date();
   const timeStr = now.toLocaleTimeString('id-ID', {
     hour: '2-digit',
@@ -115,7 +127,11 @@ function recordDailyTransaction({ type, summary, amount, profit, discountPercent
     amount,
     profit,
     discountPercent: discountPercent || 0,
-    paymentMethod: paymentMethod || (type === 'SALE' ? 'CASH' : null)
+    paymentMethod: paymentMethod || (type === 'SALE' ? 'CASH' : null),
+    ...(productId ? { productId } : {}),
+    ...(productName ? { productName } : {}),
+    ...(Number.isFinite(qty) ? { qty } : {}),
+    ...(Number.isFinite(unitPrice) ? { unitPrice } : {})
   });
 }
 
@@ -326,6 +342,12 @@ function wireStaticListeners() {
       if (id) executeRestock(ctx, id);
     }
   });
+  document.getElementById('stock-cards-grid')?.addEventListener('input', (event) => {
+    const target = event.target instanceof Element ? event.target.closest('[data-restock-input]') : null;
+    if (!target) return;
+    const id = target.getAttribute('data-restock-input');
+    if (id) updateRestockSubtotal(id);
+  });
 
   // Tab 3: Harga & POS
   document.getElementById('pos-products-grid')?.addEventListener('click', (event) => {
@@ -378,12 +400,18 @@ function wireStaticListeners() {
     }
     renderDailyTransactions(ctx);
   });
+  document.getElementById('add-expense-btn')?.addEventListener('click', () => openEditTodayIncomeModal(ctx));
   document.getElementById('edit-today-income-btn')?.addEventListener('click', () => openEditTodayIncomeModal(ctx));
 }
 
 window.addEventListener('DOMContentLoaded', () => {
   wireStaticListeners();
   showAuthScreen();
+
+  updateRealtimeClockAndShiftUI(appState);
+  window.setInterval(() => {
+    updateRealtimeClockAndShiftUI(appState);
+  }, 1000);
 
   authController = initAuthScreen({
     onAuthenticated: ({ user, storeState }) => {

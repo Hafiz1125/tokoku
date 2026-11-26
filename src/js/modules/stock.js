@@ -64,27 +64,52 @@ export function renderStockCards(ctx) {
             </div>
           </div>
 
-          <div class="flex items-end gap-2 pt-2 border-t border-slate-200">
-            <div class="flex-1 min-w-0">
-              <label for="restock-qty-${escapeHTML(p.id)}" class="block text-[11px] font-semibold text-slate-600 mb-1">
-                Jumlah Masuk (Saran: +${recommendedQty})
-              </label>
-              <input
-                type="number"
-                id="restock-qty-${escapeHTML(p.id)}"
-                min="1"
-                value="${recommendedQty}"
-                class="w-full px-3 py-2 min-h-[42px] border border-slate-300 rounded-xl text-sm font-semibold font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-600"
-              />
+          <div class="space-y-2.5 pt-2 border-t border-slate-200">
+            <div class="grid grid-cols-2 gap-2">
+              <div class="min-w-0">
+                <label for="restock-qty-${escapeHTML(p.id)}" class="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Jumlah Masuk (Saran: +${recommendedQty})
+                </label>
+                <input
+                  type="number"
+                  id="restock-qty-${escapeHTML(p.id)}"
+                  data-restock-input="${escapeHTML(p.id)}"
+                  min="1"
+                  value="${recommendedQty}"
+                  class="w-full px-3 py-2 min-h-[40px] border border-slate-300 rounded-xl text-sm font-semibold font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-600"
+                />
+              </div>
+              <div class="min-w-0">
+                <label for="restock-price-${escapeHTML(p.id)}" class="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Harga Beli / Item (Rp)
+                </label>
+                <input
+                  type="number"
+                  id="restock-price-${escapeHTML(p.id)}"
+                  data-restock-input="${escapeHTML(p.id)}"
+                  min="0"
+                  step="100"
+                  value="${p.costPrice}"
+                  class="w-full px-3 py-2 min-h-[40px] border border-slate-300 rounded-xl text-sm font-semibold font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-600"
+                />
+              </div>
             </div>
-            <button
-              type="button"
-              data-action="execute-restock"
-              data-id="${escapeHTML(p.id)}"
-              class="px-4 py-2 min-h-[42px] bg-teal-700 hover:bg-teal-800 text-white text-sm font-bold rounded-xl transition shrink-0 whitespace-nowrap cursor-pointer"
-            >
-              + Tambah Stok
-            </button>
+            <div class="flex items-center justify-between gap-2 pt-1">
+              <div class="text-xs text-slate-600">
+                Subtotal:
+                <strong id="restock-subtotal-${escapeHTML(p.id)}" class="font-mono tabular-nums text-amber-700">${formatRupiah(
+                  recommendedQty * p.costPrice
+                )}</strong>
+              </div>
+              <button
+                type="button"
+                data-action="execute-restock"
+                data-id="${escapeHTML(p.id)}"
+                class="px-4 py-2 min-h-[40px] bg-teal-700 hover:bg-teal-800 text-white text-sm font-bold rounded-xl transition shrink-0 whitespace-nowrap cursor-pointer"
+              >
+                + Tambah Stok
+              </button>
+            </div>
           </div>
         </article>
       `;
@@ -92,30 +117,49 @@ export function renderStockCards(ctx) {
     .join('');
 }
 
+export function updateRestockSubtotal(productId) {
+  const qtyInput = document.getElementById(`restock-qty-${productId}`);
+  const priceInput = document.getElementById(`restock-price-${productId}`);
+  const subtotalEl = document.getElementById(`restock-subtotal-${productId}`);
+  if (!subtotalEl) return;
+
+  const qty = Math.max(0, parseInt(qtyInput instanceof HTMLInputElement ? qtyInput.value : '0', 10) || 0);
+  const unitPrice = Math.max(0, Number(priceInput instanceof HTMLInputElement ? priceInput.value : '0') || 0);
+  subtotalEl.textContent = formatRupiah(qty * unitPrice);
+}
+
 export function executeRestock(ctx, productId) {
   const { appState, recordDailyTransaction, awardXP, unlockBadge, persistAndRefresh } = ctx;
   const prod = appState.products.find((p) => p.id === productId);
   const qtyInput = document.getElementById(`restock-qty-${productId}`);
+  const priceInput = document.getElementById(`restock-price-${productId}`);
   const qty = parseInt(qtyInput instanceof HTMLInputElement ? qtyInput.value : '0', 10);
+  const unitPriceRaw = priceInput instanceof HTMLInputElement ? Number(priceInput.value) : prod?.costPrice;
+  const unitPrice = Number.isFinite(unitPriceRaw) && unitPriceRaw >= 0 ? unitPriceRaw : prod?.costPrice || 0;
 
   if (!prod || isNaN(qty) || qty <= 0) {
     showToast('Masukkan jumlah stok masuk yang valid.', 'error');
     return;
   }
 
+  const totalCost = qty * unitPrice;
   const wasBelowROP = prod.stock <= calculateROP(prod);
   prod.stock += qty;
 
   recordDailyTransaction({
     type: 'RESTOCK',
-    summary: `Tambah stok +${qty} ${prod.name} (Grosir/Sales)`,
-    amount: 0,
+    summary: `Tambah stok +${qty} ${prod.name} @ ${formatRupiah(unitPrice)} (Grosir/Sales)`,
+    amount: totalCost,
     profit: 0,
-    discountPercent: 0
+    discountPercent: 0,
+    productId: prod.id,
+    productName: prod.name,
+    qty,
+    unitPrice
   });
 
   persistAndRefresh();
-  showToast(`Berhasil menambah +${qty} stok ${prod.name}.`, 'success');
+  showToast(`Berhasil menambah +${qty} stok ${prod.name} (${formatRupiah(totalCost)}).`, 'success');
 
   if (wasBelowROP) {
     awardXP(25, 'Menambah stok tepat waktu saat menyentuh titik ROP');

@@ -1,7 +1,40 @@
 import { renderIcon } from '../icons.js';
 import { normalizeState } from '../storage.js';
-import { closeModal, openModal, showToast } from '../ui.js';
-import { downloadFile, escapeHTML, formatRupiah } from '../utils.js';
+import { closeModal, openModal, showToast, updateRealtimeClockAndShiftUI } from '../ui.js';
+import {
+  downloadFile,
+  escapeHTML,
+  formatDurationHMS,
+  formatRealtimeClock,
+  formatRealtimeDate,
+  formatRupiah,
+  getLocalTimezoneCode
+} from '../utils.js';
+
+function parseRestockItemInfo(trx, products = []) {
+  let qty = Number(trx.qty);
+  let productName = trx.productName;
+  if (!Number.isFinite(qty) || qty <= 0 || !productName) {
+    const match = String(trx.summary || '').match(
+      /(?:Restock|Tambah stok)\s+\+?(\d+)\s+(.+?)(?:\s+@|\s*\(Grosir|$)/i
+    );
+    if (match) {
+      if (!Number.isFinite(qty) || qty <= 0) qty = parseInt(match[1], 10) || 0;
+      if (!productName) productName = match[2].trim();
+    }
+  }
+  const matchedProd =
+    products.find((p) => p.id === trx.productId) ||
+    products.find((p) => p.name.toLowerCase() === String(productName || '').toLowerCase());
+  const finalName = productName || matchedProd?.name || 'Produk Restock';
+  const totalCost = Number(trx.amount) || 0;
+  let unitPrice = Number(trx.unitPrice);
+  if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+    unitPrice = qty > 0 && totalCost > 0 ? Math.round(totalCost / qty) : matchedProd?.costPrice || 0;
+  }
+  const key = trx.productId || finalName.toLowerCase();
+  return { key, name: finalName, qty: qty || 0, unitPrice, totalCost };
+}
 
 export function renderDailyTransactions(ctx) {
   const { appState } = ctx;
@@ -60,12 +93,11 @@ export function renderDailyTransactions(ctx) {
     if (session.isOpen) {
       statusPill.className = 'text-xs font-bold text-emerald-700';
       statusPill.textContent = `Hari #${session.dayNumber} · Toko Buka`;
-      openedInfo.textContent = `Dibuka pukul ${session.openedAt} WIB · Kas Awal: ${formatRupiah(session.openingCash)}`;
     } else {
       statusPill.className = 'text-xs font-bold text-rose-700';
       statusPill.textContent = `Hari #${session.dayNumber} · Toko Tutup`;
-      openedInfo.textContent = `Ditutup pukul ${session.closedAt || '-'} WIB · Buka hari baru untuk mencatat transaksi berikutnya`;
     }
+    updateRealtimeClockAndShiftUI(appState);
   }
 
   if (actionBtn) {
@@ -82,16 +114,19 @@ export function renderDailyTransactions(ctx) {
 
   let monthlySales = 0;
   let monthlyRestock = 0;
-  let monthlyProfit = 0;
+  let monthlyRestockQty = 0;
+  const monthlyRestockItems = new Set();
   const recordedDays = new Set([session.dayNumber]);
 
   appState.transactions.forEach((trx) => {
     recordedDays.add(trx.dayNumber || 1);
     if (trx.type === 'SALE') {
       monthlySales += trx.amount;
-      monthlyProfit += trx.profit;
     } else if (trx.type === 'RESTOCK') {
-      monthlyRestock += trx.amount;
+      monthlyRestock += Number(trx.amount) || 0;
+      const info = parseRestockItemInfo(trx, appState.products);
+      monthlyRestockQty += info.qty;
+      monthlyRestockItems.add(info.key);
     }
   });
 
@@ -112,6 +147,7 @@ export function renderDailyTransactions(ctx) {
   const mSales = document.getElementById('monthly-total-sales');
   const mSalesNote = document.getElementById('monthly-total-sales-note');
   const mRestock = document.getElementById('monthly-total-restock');
+  const mRestockNote = document.getElementById('monthly-restock-note');
   if (daysBadge) daysBadge.textContent = `Total ${recordedDays.size} Hari Tercatat`;
   if (mSales) {
     mSales.textContent = formatRupiah(monthlyNetIncome);
@@ -131,6 +167,12 @@ export function renderDailyTransactions(ctx) {
     }
   }
   if (mRestock) mRestock.textContent = formatRupiah(monthlyRestock);
+  if (mRestockNote) {
+    mRestockNote.textContent =
+      monthlyRestockItems.size > 0
+        ? `${monthlyRestockItems.size} item · ${monthlyRestockQty} unit masuk (Grosir/Sales)`
+        : 'Total belanja restock semua hari';
+  }
 
   const monthlyDaySelect = document.getElementById('monthly-day-select');
   if (monthlyDaySelect instanceof HTMLSelectElement) {
@@ -204,14 +246,22 @@ export function renderDailyTransactions(ctx) {
     }
   }
   if (mExpenseNote) {
-    if (todayAdj?.note) {
+    const expenseItems = Array.isArray(todayAdj?.items) ? todayAdj.items : [];
+    if (expenseItems.length > 0) {
+      const previewTitles = expenseItems
+        .slice(0, 2)
+        .map((it) => it.title)
+        .join(', ');
+      const extraCount = expenseItems.length > 2 ? ` +${expenseItems.length - 2} lainnya` : '';
+      mExpenseNote.textContent = `${expenseItems.length} pengeluaran: ${previewTitles}${extraCount}`;
+    } else if (todayAdj?.note) {
       mExpenseNote.textContent = `Catatan: ${todayAdj.note}`;
     } else if (todayExpense > 0) {
       mExpenseNote.textContent = `Pengeluaran Hari #${selectedMonthlyDay}`;
     } else if (todayExpense < 0) {
       mExpenseNote.textContent = `Penambahan manual Hari #${selectedMonthlyDay}`;
     } else {
-      mExpenseNote.textContent = 'Klik Edit untuk mencatat uang keluar';
+      mExpenseNote.textContent = 'Klik Tambah untuk mencatat pengeluaran';
     }
   }
 
@@ -275,6 +325,84 @@ export function renderDailyTransactions(ctx) {
   if (dNonCashSales) dNonCashSales.textContent = formatRupiah(selectedNonCashSales);
   if (dNonCashSub) dNonCashSub.textContent = `Pembayaran QRIS / transfer ${activeDayLabel}`;
 
+  const restockBodyEl = document.getElementById('restock-breakdown-body');
+  const restockFootEl = document.getElementById('restock-breakdown-foot');
+  const restockGrandTotalEl = document.getElementById('restock-breakdown-grand-total');
+  const restockSubtitleEl = document.getElementById('restock-breakdown-subtitle');
+
+  const restockMap = new Map();
+  let restockGrandQty = 0;
+  let restockGrandCost = 0;
+
+  filteredTransactions
+    .filter((t) => t.type === 'RESTOCK')
+    .forEach((trx) => {
+      const info = parseRestockItemInfo(trx, appState.products);
+      restockGrandQty += info.qty;
+      restockGrandCost += info.totalCost;
+
+      const existing = restockMap.get(info.key);
+      if (existing) {
+        existing.qty += info.qty;
+        existing.totalCost += info.totalCost;
+        existing.prices.add(info.unitPrice);
+      } else {
+        restockMap.set(info.key, {
+          name: info.name,
+          qty: info.qty,
+          totalCost: info.totalCost,
+          prices: new Set([info.unitPrice])
+        });
+      }
+    });
+
+  if (restockSubtitleEl) {
+    restockSubtitleEl.textContent = `Rekap per barang untuk ${activeDayLabel} (Grosir/Sales)`;
+  }
+  if (restockGrandTotalEl) {
+    restockGrandTotalEl.textContent = formatRupiah(restockGrandCost);
+  }
+  if (restockBodyEl && restockFootEl) {
+    if (restockMap.size === 0) {
+      restockBodyEl.innerHTML = `
+        <tr>
+          <td colspan="4" class="py-8 px-4 text-center text-sm text-slate-500">
+            Belum ada catatan belanja restock pada ${escapeHTML(activeDayLabel)}.
+          </td>
+        </tr>
+      `;
+      restockFootEl.innerHTML = '';
+    } else {
+      restockBodyEl.innerHTML = Array.from(restockMap.values())
+        .map((item) => {
+          const priceList = Array.from(item.prices).sort((a, b) => a - b);
+          const priceDisplay =
+            priceList.length === 1
+              ? formatRupiah(priceList[0])
+              : `${formatRupiah(priceList[0])} – ${formatRupiah(priceList[priceList.length - 1])}`;
+          return `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3 px-4 font-semibold text-slate-900">${escapeHTML(item.name)}</td>
+              <td class="py-3 px-4 text-center font-mono tabular-nums font-bold text-teal-700">+${item.qty} unit</td>
+              <td class="py-3 px-4 text-right font-mono tabular-nums text-slate-700">${priceDisplay}</td>
+              <td class="py-3 px-4 text-right font-mono tabular-nums font-bold text-slate-900">${formatRupiah(
+                item.totalCost
+              )}</td>
+            </tr>
+          `;
+        })
+        .join('');
+      restockFootEl.innerHTML = `
+        <tr>
+          <td class="py-3 px-4 text-slate-900">Total Keseluruhan (${restockMap.size} item)</td>
+          <td class="py-3 px-4 text-center font-mono tabular-nums text-teal-800">+${restockGrandQty} unit</td>
+          <td class="py-3 px-4 text-right text-xs font-medium text-slate-500">Semua item</td>
+          <td class="py-3 px-4 text-right font-mono tabular-nums text-amber-700">${formatRupiah(restockGrandCost)}</td>
+        </tr>
+      `;
+    }
+  }
+
   if (filteredTransactions.length === 0) {
     listEl.innerHTML = `<p class="text-sm text-slate-500 text-center py-8">Belum ada transaksi tercatat pada filter hari yang dipilih.</p>`;
   } else {
@@ -284,13 +412,16 @@ export function renderDailyTransactions(ctx) {
         const isAudit = trx.type === 'AUDIT';
         const tDay = trx.dayNumber || 1;
 
-        let iconWrapClass = 'bg-amber-100 text-amber-800';
-        let iconName = 'arrow-up-right';
-        let typeLabel = 'BELANJA STOK';
-        let typeTextClass = 'text-amber-800';
-        let rightAmountHTML = `<div class="font-extrabold font-mono tabular-nums text-rose-700">- ${formatRupiah(
-          trx.amount
-        )}</div><div class="text-[11px] text-slate-500">Modal Masuk Stok</div>`;
+        let iconWrapClass = 'bg-teal-100 text-teal-800';
+        let iconName = 'package';
+        let typeLabel = 'STOK MASUK';
+        let typeTextClass = 'text-teal-800';
+        let rightAmountHTML =
+          (Number(trx.amount) || 0) > 0
+            ? `<div class="font-extrabold font-mono tabular-nums text-amber-700">${formatRupiah(
+                trx.amount
+              )}</div><div class="text-[11px] text-slate-500">Belanja Grosir/Sales</div>`
+            : `<div class="font-bold text-teal-700 text-xs">Tambah Stok</div><div class="text-[11px] text-slate-500">Non-kas (Grosir/Sales)</div>`;
 
         if (isSale) {
           iconWrapClass = 'bg-emerald-100 text-emerald-800';
@@ -308,12 +439,6 @@ export function renderDailyTransactions(ctx) {
           typeLabel = 'AUDIT STOK';
           typeTextClass = 'text-slate-700';
           rightAmountHTML = `<div class="font-bold text-slate-700 text-xs">Penyesuaian Fisik</div><div class="text-[11px] text-slate-500">Non-kas</div>`;
-        } else if (trx.type === 'RESTOCK' && (Number(trx.amount) || 0) === 0) {
-          iconWrapClass = 'bg-teal-100 text-teal-800';
-          iconName = 'package';
-          typeLabel = 'STOK MASUK';
-          typeTextClass = 'text-teal-800';
-          rightAmountHTML = `<div class="font-bold text-teal-700 text-xs">Tambah Stok</div><div class="text-[11px] text-slate-500">Non-kas (Grosir/Sales)</div>`;
         }
 
         const paymentBadge = isSale
@@ -361,6 +486,11 @@ export function renderDailyTransactions(ctx) {
             typeof arc.totalSales === 'number'
               ? ` &middot; Omzet: ${formatRupiah(arc.totalSales)} &middot; Laba: ${formatRupiah(arc.totalProfit || 0)}`
               : '';
+          const arcDuration =
+            Number.isFinite(Number(arc.openedTimestamp)) && Number.isFinite(Number(arc.closedTimestamp))
+              ? ` · Durasi ${formatDurationHMS(Number(arc.closedTimestamp) - Number(arc.openedTimestamp))}`
+              : '';
+          const arcTz = escapeHTML(arc.timezone || getLocalTimezoneCode());
           return `
             <div class="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm">
               <div>
@@ -369,7 +499,7 @@ export function renderDailyTransactions(ctx) {
                   <span aria-hidden="true" class="text-slate-300">&middot;</span>
                   <span class="text-slate-600 font-mono tabular-nums">Buka ${escapeHTML(arc.openedAt)} &ndash; Tutup ${escapeHTML(
                     arc.closedAt
-                  )} WIB</span>
+                  )} ${arcTz}${escapeHTML(arcDuration)}</span>
                 </div>
                 <p class="text-xs text-slate-600 mt-1 font-mono tabular-nums">
                   ${arc.transactionCount} transaksi &middot; Kas Awal: ${formatRupiah(arc.openingCash)}${salesInfo}
@@ -443,7 +573,7 @@ export function openDailyClosingModal(ctx) {
 
   const todayAdj = appState.dailyAdjustments?.[String(session.dayNumber)];
   const todayExpense = Number(todayAdj?.expense) || 0;
-  const expectedEndingCash = session.openingCash + totalSales - totalRestock - todayExpense;
+  const expectedEndingCash = session.openingCash + totalSales - todayExpense;
   const expenseRowHTML =
     todayExpense !== 0
       ? `
@@ -456,17 +586,41 @@ export function openDailyClosingModal(ctx) {
       `
       : '';
 
+  const now = new Date();
+  const tz = getLocalTimezoneCode(now);
+  const hasOpenedTimestamp = Number.isFinite(Number(session.openedTimestamp));
+  const initialDuration = hasOpenedTimestamp
+    ? formatDurationHMS(now.getTime() - Number(session.openedTimestamp))
+    : '-';
+
   const bodyHTML = `
     <div class="space-y-3">
       <div class="p-3 rounded-xl bg-teal-50 border border-teal-200 text-xs text-teal-950">
         <strong>Konsep Ilmiah Cash Reconciliation (Tutup Kasir):</strong><br />
-        <code class="font-mono">Kas Akhir = Kas Awal Buka + Total Penjualan - Pengeluaran Restock - Uang Keluar</code>
+        <code class="font-mono">Kas Akhir = Kas Awal Buka + Total Penjualan - Uang Keluar</code>
       </div>
       <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-200 space-y-2 text-xs">
         <div class="flex justify-between">
-          <span class="text-slate-600">Operasional Hari ke-${session.dayNumber} (Buka ${escapeHTML(session.openedAt)}):</span>
+          <span class="text-slate-600">Operasional Hari ke-${session.dayNumber} (Buka ${escapeHTML(session.openedAt)} ${escapeHTML(tz)}):</span>
           <strong class="font-mono tabular-nums text-slate-900">${salesCount} Penjualan</strong>
         </div>
+        <div class="flex justify-between">
+          <span class="text-slate-600">Waktu Tutup (Real-time):</span>
+          <strong id="modal-realtime-clock" class="font-mono tabular-nums text-teal-700">${escapeHTML(
+            formatRealtimeClock(now)
+          )} ${escapeHTML(tz)}</strong>
+        </div>
+        ${
+          hasOpenedTimestamp
+            ? `
+        <div class="flex justify-between">
+          <span class="text-slate-600">Durasi Operasional:</span>
+          <strong id="modal-realtime-duration" class="font-mono tabular-nums text-slate-900">${escapeHTML(
+            initialDuration
+          )}</strong>
+        </div>`
+            : ''
+        }
         <div class="flex justify-between">
           <span class="text-slate-600">Kas Awal Saat Buka Toko:</span>
           <strong class="font-mono tabular-nums text-slate-900">${formatRupiah(session.openingCash)}</strong>
@@ -476,8 +630,8 @@ export function openDailyClosingModal(ctx) {
           <strong class="font-mono tabular-nums">+ ${formatRupiah(totalSales)}</strong>
         </div>
         <div class="flex justify-between text-amber-700">
-          <span>(-) Pengeluaran Belanja Stok:</span>
-          <strong class="font-mono tabular-nums">- ${formatRupiah(totalRestock)}</strong>
+          <span>Belanja Restock (Grosir/Sales, Non-laci):</span>
+          <strong class="font-mono tabular-nums">${formatRupiah(totalRestock)}</strong>
         </div>
         ${expenseRowHTML}
         <div class="flex justify-between pt-2 border-t border-slate-200 text-sm font-extrabold text-slate-900">
@@ -512,10 +666,14 @@ export function openDailyClosingModal(ctx) {
     onMount: () => {
       document.getElementById('cancel-close-shift-btn')?.addEventListener('click', closeModal);
       document.getElementById('confirm-close-shift-btn')?.addEventListener('click', () => {
-        const nowStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        const closeNow = new Date();
+        const nowStr = formatRealtimeClock(closeNow);
+        const closeTs = closeNow.getTime();
+        const closeTz = getLocalTimezoneCode(closeNow);
         const currentDay = appState.dailySession.dayNumber;
         appState.dailySession.isOpen = false;
         appState.dailySession.closedAt = nowStr;
+        appState.dailySession.closedTimestamp = closeTs;
 
         const dayTransactions = appState.transactions.filter((t) => (t.dayNumber || 1) === currentDay);
         let daySales = 0;
@@ -533,7 +691,10 @@ export function openDailyClosingModal(ctx) {
         appState.dailyHistoryArchive.unshift({
           dayNumber: currentDay,
           openedAt: appState.dailySession.openedAt,
+          openedTimestamp: appState.dailySession.openedTimestamp || null,
           closedAt: nowStr,
+          closedTimestamp: closeTs,
+          timezone: closeTz,
           openingCash: appState.dailySession.openingCash,
           closingCash: appState.storeProfile.cashBalance,
           totalSales: daySales,
@@ -554,6 +715,8 @@ export function openDailyClosingModal(ctx) {
 export function openStartNewDayModal(ctx) {
   const { appState, persistAndRefresh } = ctx;
   const nextDay = (appState.dailySession?.dayNumber || 1) + 1;
+  const now = new Date();
+  const tz = getLocalTimezoneCode(now);
 
   openModal({
     title: `Buka Operasional Toko — Hari #${nextDay}`,
@@ -562,8 +725,11 @@ export function openStartNewDayModal(ctx) {
       appState.storeProfile.storeName
     )}</strong>.</p>
       <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-1">
+        <div>Waktu Buka (Real-time): <strong id="modal-realtime-clock" class="font-mono tabular-nums text-teal-800">${escapeHTML(
+          formatRealtimeClock(now)
+        )} ${escapeHTML(tz)}</strong> <span class="text-emerald-800">(${escapeHTML(formatRealtimeDate(now))})</span></div>
         <div>Saldo Kas Awal Laci: <strong class="font-mono tabular-nums">${formatRupiah(0)}</strong> (Direset ke 0 setiap buka toko)</div>
-        <div>Log transaksi harian baru akan dimulai dari pukul sekarang.</div>
+        <div>Log transaksi harian baru akan tercatat mulai dari waktu sekarang.</div>
       </div>
     `,
     footerHTML: `
@@ -577,17 +743,23 @@ export function openStartNewDayModal(ctx) {
     onMount: () => {
       document.getElementById('cancel-new-day-btn')?.addEventListener('click', closeModal);
       document.getElementById('confirm-new-day-btn')?.addEventListener('click', () => {
+        const openNow = new Date();
         appState.storeProfile.cashBalance = 0;
         appState.dailySession = {
           isOpen: true,
           dayNumber: nextDay,
-          openedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+          openedAt: formatRealtimeClock(openNow),
+          openedTimestamp: openNow.getTime(),
           openingCash: 0,
-          closedAt: null
+          closedAt: null,
+          closedTimestamp: null
         };
         closeModal();
         persistAndRefresh();
-        showToast(`Toko resmi dibuka untuk Hari #${nextDay}! Kas toko direset menjadi Rp 0.`, 'success');
+        showToast(
+          `Toko resmi dibuka Hari #${nextDay} pukul ${appState.dailySession.openedAt} ${getLocalTimezoneCode(openNow)}!`,
+          'success'
+        );
       });
     }
   });
@@ -665,6 +837,31 @@ export function openBackupRestoreModal(ctx) {
   });
 }
 
+function getDayExpenseItems(appState, dayKey) {
+  const adj = appState.dailyAdjustments?.[dayKey];
+  if (!adj || typeof adj !== 'object') return [];
+  if (Array.isArray(adj.items) && adj.items.length > 0) {
+    return adj.items.map((it, idx) => ({
+      id: it.id || `EXP-${dayKey}-${idx + 1}`,
+      title: it.title || 'Pengeluaran Harian',
+      amount: Number(it.amount) || 0,
+      time: it.time || ''
+    }));
+  }
+  const legacyExp = Number(adj.expense) || 0;
+  if (legacyExp !== 0) {
+    return [
+      {
+        id: `EXP-${dayKey}-LEGACY`,
+        title: adj.note || 'Pengeluaran Harian',
+        amount: legacyExp,
+        time: adj.updatedAt || ''
+      }
+    ];
+  }
+  return [];
+}
+
 export function openEditTodayIncomeModal(ctx) {
   const { appState, persistAndRefresh } = ctx;
   const session = appState.dailySession;
@@ -680,144 +877,297 @@ export function openEditTodayIncomeModal(ctx) {
     .filter((t) => (t.dayNumber || 1) === targetDay && t.type === 'SALE')
     .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
-  const currentAdj = appState.dailyAdjustments?.[dayKey];
-  const currentExpense = Number(currentAdj?.expense) || 0;
-  const currentNetIncome = todaySales - currentExpense;
+  let items = getDayExpenseItems(appState, dayKey);
+  let editingItemId = null;
 
-  openModal({
-    title: `Edit Total Pemasukan — Hari #${targetDay}`,
-    bodyHTML: `
-      <div class="space-y-4">
-        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
-          <span class="text-slate-600 font-medium">Total Omzet Penjualan Hari #${targetDay}:</span>
+  const syncExpenseToState = () => {
+    const prevExpense = Number(appState.dailyAdjustments?.[dayKey]?.expense) || 0;
+    const nextExpense = items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
+    const deltaExpense = nextExpense - prevExpense;
+
+    if (!appState.dailyAdjustments || typeof appState.dailyAdjustments !== 'object') {
+      appState.dailyAdjustments = {};
+    }
+
+    if (items.length === 0) {
+      delete appState.dailyAdjustments[dayKey];
+    } else {
+      const summaryNote = items.map((it) => it.title).join(', ').slice(0, 120);
+      appState.dailyAdjustments[dayKey] = {
+        expense: nextExpense,
+        note: summaryNote,
+        updatedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+        items: items.map((it) => ({ ...it }))
+      };
+    }
+
+    if (targetDay === session.dayNumber) {
+      appState.storeProfile.cashBalance = Math.max(0, appState.storeProfile.cashBalance - deltaExpense);
+    }
+    const arcEntry = (appState.dailyHistoryArchive || []).find((a) => a.dayNumber === targetDay);
+    if (arcEntry) {
+      arcEntry.dailyExpense = nextExpense;
+    }
+
+    persistAndRefresh();
+  };
+
+  const bodyHTML = `
+    <div class="space-y-4">
+      <div class="grid grid-cols-3 gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+        <div>
+          <span class="text-slate-500 block">Omzet Hari #${targetDay}</span>
           <strong class="font-mono tabular-nums text-sm text-slate-900">${formatRupiah(todaySales)}</strong>
         </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label for="edit-income-expense-input" class="block text-xs font-bold text-slate-700 mb-1">
-              Uang Keluar / Kebutuhan (Rp)
-            </label>
-            <input
-              type="number"
-              id="edit-income-expense-input"
-              step="500"
-              value="${currentExpense}"
-              class="w-full px-3.5 py-2.5 min-h-[44px] border border-slate-300 rounded-xl text-sm font-mono tabular-nums font-semibold focus:outline-none focus:ring-2 focus:ring-teal-600"
-            />
-          </div>
-          <div>
-            <label for="edit-income-total-input" class="block text-xs font-bold text-slate-700 mb-1">
-              Total Pemasukan Hari #${targetDay} (Rp)
-            </label>
-            <input
-              type="number"
-              id="edit-income-total-input"
-              step="500"
-              value="${currentNetIncome}"
-              class="w-full px-3.5 py-2.5 min-h-[44px] border border-slate-300 rounded-xl text-sm font-mono tabular-nums font-bold text-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-600"
-            />
-          </div>
-        </div>
-
         <div>
-          <label for="edit-income-note-input" class="block text-xs font-bold text-slate-700 mb-1">
-            Catatan Uang Keluar / Kebutuhan (Opsional)
-          </label>
-          <input
-            type="text"
-            id="edit-income-note-input"
-            maxlength="120"
-            value="${escapeHTML(currentAdj?.note || '')}"
-            placeholder="Contoh: Beli plastik, makan siang, bensin, dll."
-            class="w-full px-3.5 py-2.5 min-h-[44px] border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
-          />
+          <span class="text-slate-500 block">Total Uang Keluar</span>
+          <strong id="modal-expense-total" class="font-mono tabular-nums text-sm text-rose-700">Rp 0</strong>
         </div>
-
-        <p class="text-xs text-slate-500 leading-relaxed">
-          Anda dapat mengisi nominal <strong>Uang Keluar</strong> atau langsung mengubah angka <strong>Total Pemasukan Hari #${targetDay}</strong>. Total Pemasukan Bulan Ini akan ikut menyesuaikan selisihnya secara otomatis.
-        </p>
+        <div>
+          <span class="text-slate-500 block">Pemasukan Bersih</span>
+          <strong id="modal-net-income-total" class="font-mono tabular-nums text-sm text-emerald-700">Rp 0</strong>
+        </div>
       </div>
-    `,
-    footerHTML: `
-      <button type="button" id="reset-today-income-btn" class="px-3.5 py-2 min-h-[40px] rounded-xl text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 cursor-pointer mr-auto">
-        Reset ke Omzet Asli
-      </button>
-      <button type="button" id="cancel-edit-income-btn" class="px-4 py-2 min-h-[40px] rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer">
-        Batal
-      </button>
-      <button type="button" id="save-edit-income-btn" class="px-4 py-2 min-h-[40px] rounded-xl text-sm font-bold bg-teal-700 hover:bg-teal-800 text-white cursor-pointer">
-        Simpan Pemasukan
-      </button>
-    `,
-    onMount: () => {
-      const expenseInput = document.getElementById('edit-income-expense-input');
-      const totalInput = document.getElementById('edit-income-total-input');
-      const noteInput = document.getElementById('edit-income-note-input');
 
-      expenseInput?.addEventListener('input', () => {
-        if (!(expenseInput instanceof HTMLInputElement) || !(totalInput instanceof HTMLInputElement)) return;
-        const expVal = Number(expenseInput.value);
-        if (Number.isFinite(expVal)) {
-          totalInput.value = String(todaySales - expVal);
+      <form id="expense-item-form" class="p-3.5 rounded-xl bg-teal-50/60 border border-teal-200 space-y-3">
+        <div class="flex items-center justify-between">
+          <h5 id="expense-form-heading" class="text-xs font-bold text-teal-900">Tambah Pengeluaran Baru</h5>
+          <button
+            type="button"
+            id="cancel-item-edit-btn"
+            class="hidden text-[11px] font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+          >Batal Ubah</button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
+          <div class="sm:col-span-3">
+            <label for="new-expense-title" class="block text-[11px] font-bold text-slate-700 mb-1">
+              Keperluan / Keterangan
+            </label>
+            <input
+              type="text"
+              id="new-expense-title"
+              maxlength="100"
+              placeholder="Contoh: Beli plastik, bensin, makan siang..."
+              class="w-full px-3 py-2 min-h-[40px] bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+            />
+          </div>
+          <div class="sm:col-span-2">
+            <label for="new-expense-amount" class="block text-[11px] font-bold text-slate-700 mb-1">
+              Nominal (Rp)
+            </label>
+            <input
+              type="number"
+              id="new-expense-amount"
+              step="500"
+              placeholder="15000"
+              class="w-full px-3 py-2 min-h-[40px] bg-white border border-slate-300 rounded-xl text-sm font-mono tabular-nums font-semibold focus:outline-none focus:ring-2 focus:ring-teal-600"
+            />
+          </div>
+        </div>
+        <button
+          type="submit"
+          id="submit-expense-item-btn"
+          class="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 min-h-[40px] rounded-xl text-xs font-bold bg-teal-700 hover:bg-teal-800 text-white transition cursor-pointer"
+        >
+          ${renderIcon('plus-circle', 'w-4 h-4')}
+          <span id="submit-expense-btn-label">Tambah ke Daftar Pengeluaran</span>
+        </button>
+      </form>
+
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <h5 class="text-xs font-bold text-slate-700">Daftar Pengeluaran Hari #${targetDay}</h5>
+          <span id="modal-expense-count" class="text-xs font-mono tabular-nums text-slate-500">0 item</span>
+        </div>
+        <div id="expense-items-list" class="divide-y divide-slate-200 max-h-56 overflow-y-auto border border-slate-200 rounded-xl bg-white"></div>
+      </div>
+    </div>
+  `;
+
+  const footerHTML = `
+    <button type="button" id="reset-today-income-btn" class="px-3.5 py-2 min-h-[40px] rounded-xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 cursor-pointer mr-auto">
+      Hapus Semua Pengeluaran
+    </button>
+    <button type="button" id="cancel-edit-income-btn" class="px-4 py-2 min-h-[40px] rounded-xl text-sm font-bold bg-slate-900 hover:bg-slate-800 text-white cursor-pointer">
+      Selesai
+    </button>
+  `;
+
+  openModal({
+    title: `Uang Keluar & Pengeluaran — Hari #${targetDay}`,
+    bodyHTML,
+    footerHTML,
+    onMount: () => {
+      const formEl = document.getElementById('expense-item-form');
+      const headingEl = document.getElementById('expense-form-heading');
+      const cancelEditBtn = document.getElementById('cancel-item-edit-btn');
+      const submitBtnLabel = document.getElementById('submit-expense-btn-label');
+      const titleInput = document.getElementById('new-expense-title');
+      const amountInput = document.getElementById('new-expense-amount');
+      const listEl = document.getElementById('expense-items-list');
+      const totalExpenseEl = document.getElementById('modal-expense-total');
+      const netIncomeEl = document.getElementById('modal-net-income-total');
+      const countEl = document.getElementById('modal-expense-count');
+      const resetAllBtn = document.getElementById('reset-today-income-btn');
+
+      const resetFormMode = () => {
+        editingItemId = null;
+        if (headingEl) headingEl.textContent = 'Tambah Pengeluaran Baru';
+        if (submitBtnLabel) submitBtnLabel.textContent = 'Tambah ke Daftar Pengeluaran';
+        cancelEditBtn?.classList.add('hidden');
+        if (titleInput instanceof HTMLInputElement) titleInput.value = '';
+        if (amountInput instanceof HTMLInputElement) amountInput.value = '';
+      };
+
+      const renderExpenseModalList = () => {
+        const totalExp = items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
+        const netIncome = todaySales - totalExp;
+
+        if (totalExpenseEl) {
+          totalExpenseEl.textContent =
+            totalExp > 0
+              ? `- ${formatRupiah(totalExp)}`
+              : totalExp < 0
+                ? `+ ${formatRupiah(Math.abs(totalExp))}`
+                : formatRupiah(0);
+        }
+        if (netIncomeEl) {
+          netIncomeEl.textContent = formatRupiah(netIncome);
+          netIncomeEl.className = `font-mono tabular-nums text-sm ${
+            netIncome >= 0 ? 'text-emerald-700' : 'text-rose-700'
+          }`;
+        }
+        if (countEl) countEl.textContent = `${items.length} item`;
+        if (resetAllBtn) {
+          resetAllBtn.classList.toggle('hidden', items.length === 0);
+        }
+
+        if (!listEl) return;
+        if (items.length === 0) {
+          listEl.innerHTML = `<p class="text-xs text-slate-500 text-center py-6">Belum ada pengeluaran tercatat untuk Hari #${targetDay}. Tambahkan di formulir di atas.</p>`;
+          return;
+        }
+
+        listEl.innerHTML = items
+          .map(
+            (it) => `
+            <div class="px-3.5 py-2.5 flex items-center justify-between gap-3 text-xs">
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold text-slate-900 break-words">${escapeHTML(it.title)}</div>
+                ${it.time ? `<div class="text-[11px] text-slate-500 font-mono tabular-nums">${escapeHTML(it.time)} WIB</div>` : ''}
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <strong class="font-mono tabular-nums text-sm ${
+                  it.amount >= 0 ? 'text-rose-700' : 'text-emerald-700'
+                }">${it.amount >= 0 ? `- ${formatRupiah(it.amount)}` : `+ ${formatRupiah(Math.abs(it.amount))}`}</strong>
+                <button
+                  type="button"
+                  data-action="edit-expense-item"
+                  data-id="${escapeHTML(it.id)}"
+                  aria-label="Ubah pengeluaran"
+                  class="p-1.5 rounded-lg text-slate-500 hover:text-teal-700 hover:bg-slate-100 transition cursor-pointer"
+                >${renderIcon('edit-3', 'w-3.5 h-3.5')}</button>
+                <button
+                  type="button"
+                  data-action="delete-expense-item"
+                  data-id="${escapeHTML(it.id)}"
+                  aria-label="Hapus pengeluaran"
+                  class="p-1.5 rounded-lg text-slate-500 hover:text-rose-700 hover:bg-rose-50 transition cursor-pointer"
+                >${renderIcon('trash-2', 'w-3.5 h-3.5')}</button>
+              </div>
+            </div>
+          `
+          )
+          .join('');
+      };
+
+      renderExpenseModalList();
+
+      formEl?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const title = titleInput instanceof HTMLInputElement ? titleInput.value.trim() : '';
+        const amount = Number(amountInput instanceof HTMLInputElement ? amountInput.value : '');
+
+        if (!title) {
+          showToast('Masukkan keterangan keperluan pengeluaran.', 'error');
+          if (titleInput instanceof HTMLInputElement) titleInput.focus();
+          return;
+        }
+        if (!Number.isFinite(amount) || amount === 0) {
+          showToast('Masukkan nominal pengeluaran yang valid (tidak boleh 0).', 'error');
+          if (amountInput instanceof HTMLInputElement) amountInput.focus();
+          return;
+        }
+
+        const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        if (editingItemId) {
+          const targetItem = items.find((it) => it.id === editingItemId);
+          if (targetItem) {
+            targetItem.title = title;
+            targetItem.amount = amount;
+            targetItem.time = timeStr;
+          }
+          showToast(`Pengeluaran "${title}" diperbarui.`, 'success');
+        } else {
+          items.unshift({
+            id: `EXP-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+            title,
+            amount,
+            time: timeStr
+          });
+          showToast(`Ditambahkan: ${title} (${formatRupiah(amount)}).`, 'success');
+        }
+
+        resetFormMode();
+        syncExpenseToState();
+        renderExpenseModalList();
+        if (titleInput instanceof HTMLInputElement) titleInput.focus();
+      });
+
+      cancelEditBtn?.addEventListener('click', () => {
+        resetFormMode();
+        if (titleInput instanceof HTMLInputElement) titleInput.focus();
+      });
+
+      listEl?.addEventListener('click', (event) => {
+        const target = event.target instanceof Element ? event.target.closest('[data-action]') : null;
+        if (!target) return;
+        const action = target.getAttribute('data-action');
+        const id = target.getAttribute('data-id');
+        if (!id) return;
+
+        if (action === 'delete-expense-item') {
+          items = items.filter((it) => it.id !== id);
+          if (editingItemId === id) resetFormMode();
+          syncExpenseToState();
+          renderExpenseModalList();
+          showToast('Item pengeluaran dihapus.', 'info');
+        } else if (action === 'edit-expense-item') {
+          const item = items.find((it) => it.id === id);
+          if (!item) return;
+          editingItemId = item.id;
+          if (headingEl) headingEl.textContent = 'Ubah Pengeluaran';
+          if (submitBtnLabel) submitBtnLabel.textContent = 'Simpan Perubahan';
+          cancelEditBtn?.classList.remove('hidden');
+          if (titleInput instanceof HTMLInputElement) {
+            titleInput.value = item.title;
+            titleInput.focus();
+          }
+          if (amountInput instanceof HTMLInputElement) {
+            amountInput.value = String(item.amount);
+          }
         }
       });
 
-      totalInput?.addEventListener('input', () => {
-        if (!(expenseInput instanceof HTMLInputElement) || !(totalInput instanceof HTMLInputElement)) return;
-        const totalVal = Number(totalInput.value);
-        if (Number.isFinite(totalVal)) {
-          expenseInput.value = String(todaySales - totalVal);
-        }
+      resetAllBtn?.addEventListener('click', () => {
+        items = [];
+        resetFormMode();
+        syncExpenseToState();
+        renderExpenseModalList();
+        showToast(`Semua pengeluaran Hari #${targetDay} telah dihapus.`, 'info');
       });
 
       document.getElementById('cancel-edit-income-btn')?.addEventListener('click', closeModal);
-
-      document.getElementById('reset-today-income-btn')?.addEventListener('click', () => {
-        if (expenseInput instanceof HTMLInputElement) expenseInput.value = '0';
-        if (totalInput instanceof HTMLInputElement) totalInput.value = String(todaySales);
-        if (noteInput instanceof HTMLInputElement) noteInput.value = '';
-      });
-
-      document.getElementById('save-edit-income-btn')?.addEventListener('click', () => {
-        const nextTotal = Number(totalInput instanceof HTMLInputElement ? totalInput.value : todaySales);
-        if (!Number.isFinite(nextTotal)) {
-          showToast('Masukkan nominal total pemasukan yang valid.', 'error');
-          return;
-        }
-        const nextExpense = todaySales - nextTotal;
-        const nextNote = noteInput instanceof HTMLInputElement ? noteInput.value.trim() : '';
-        const deltaExpense = nextExpense - currentExpense;
-
-        if (!appState.dailyAdjustments || typeof appState.dailyAdjustments !== 'object') {
-          appState.dailyAdjustments = {};
-        }
-
-        if (nextExpense === 0 && !nextNote) {
-          delete appState.dailyAdjustments[dayKey];
-        } else {
-          appState.dailyAdjustments[dayKey] = {
-            expense: nextExpense,
-            note: nextNote,
-            updatedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-          };
-        }
-
-        if (targetDay === session.dayNumber) {
-          appState.storeProfile.cashBalance = Math.max(0, appState.storeProfile.cashBalance - deltaExpense);
-        }
-        const arcEntry = (appState.dailyHistoryArchive || []).find((a) => a.dayNumber === targetDay);
-        if (arcEntry) {
-          arcEntry.dailyExpense = nextExpense;
-        }
-
-        closeModal();
-        persistAndRefresh();
-        showToast(
-          `Total pemasukan Hari #${targetDay} disimpan: ${formatRupiah(nextTotal)}.`,
-          'success'
-        );
-      });
     }
   });
 }
