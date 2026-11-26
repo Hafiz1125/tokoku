@@ -66,7 +66,7 @@ export function renderProductsGrid(ctx) {
                 <div class="flex items-center justify-between gap-2 text-xs text-slate-500">
                   <span>${escapeHTML(p.category)}</span>
                   <span class="font-mono tabular-nums font-bold ${marginTextClass}">
-                    Margin ${margin.toFixed(1)}% &middot; ${marginStatusLabel}
+                    Keuntungan ${margin.toFixed(1)}% &middot; ${marginStatusLabel}
                   </span>
                 </div>
                 <h4 class="font-bold text-slate-900 text-base mt-1 truncate" title="${escapeHTML(p.name)}">
@@ -76,7 +76,7 @@ export function renderProductsGrid(ctx) {
 
               <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100 text-xs">
                 <div>
-                  <span class="text-slate-500 block">HPP (Modal)</span>
+                  <span class="text-slate-500 block">Harga Modal</span>
                   <strong class="font-mono tabular-nums text-slate-800 font-semibold">${formatRupiah(p.costPrice)}</strong>
                 </div>
                 <div class="text-right">
@@ -241,7 +241,7 @@ export function openProductFormModal(ctx, productId = null) {
 
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label for="prod-cost" class="block text-xs font-bold text-slate-700 mb-1">Harga Modal / HPP (Rp)</label>
+          <label for="prod-cost" class="block text-xs font-bold text-slate-700 mb-1">Harga Modal / Beli (Rp)</label>
           <input
             type="number"
             id="prod-cost"
@@ -271,37 +271,20 @@ export function openProductFormModal(ctx, productId = null) {
         <strong class="font-mono tabular-nums">${calculateMargin(prod.costPrice, prod.sellPrice).toFixed(1)}%</strong>
       </div>
 
-      <div class="grid grid-cols-3 gap-2 pt-1">
-        <div>
-          <label for="prod-daily" class="block text-[11px] font-bold text-slate-600 mb-1">Laku/Hari</label>
-          <input
-            type="number"
-            id="prod-daily"
-            min="1"
-            value="${prod.dailySalesAvg}"
-            class="w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs font-mono tabular-nums"
-          />
-        </div>
-        <div>
-          <label for="prod-lead" class="block text-[11px] font-bold text-slate-600 mb-1">Lead Time (Hari)</label>
-          <input
-            type="number"
-            id="prod-lead"
-            min="1"
-            value="${prod.leadTimeDays}"
-            class="w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs font-mono tabular-nums"
-          />
-        </div>
-        <div>
-          <label for="prod-safety" class="block text-[11px] font-bold text-slate-600 mb-1">Safety Stock</label>
-          <input
-            type="number"
-            id="prod-safety"
-            min="0"
-            value="${prod.safetyStock}"
-            class="w-full px-2.5 py-2 border border-slate-300 rounded-lg text-xs font-mono tabular-nums"
-          />
-        </div>
+      <div>
+        <label for="prod-safety" class="block text-xs font-bold text-slate-700 mb-1">
+          Peringatan Stok Minimum (Unit)
+        </label>
+        <input
+          type="number"
+          id="prod-safety"
+          min="1"
+          value="${Math.max(1, Number(prod.safetyStock) || 5)}"
+          class="w-full px-3.5 py-2 min-h-[42px] border border-slate-300 rounded-xl text-sm font-mono tabular-nums focus:ring-2 focus:ring-teal-600 focus:outline-none"
+        />
+        <p class="text-[11px] text-slate-500 mt-1">
+          Barang ditandai "Perlu Restock" jika sisa stok kurang dari atau sama dengan batas ini.
+        </p>
       </div>
     </form>
   `;
@@ -336,7 +319,7 @@ export function openProductFormModal(ctx, productId = null) {
         if (sell <= cost) {
           marginPreviewBox.className =
             'p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900 font-medium';
-          marginPreviewBox.innerHTML = `Peringatan: Harga jual lebih rendah atau sama dengan HPP (Margin: <strong class="font-mono tabular-nums">${margin.toFixed(
+          marginPreviewBox.innerHTML = `Peringatan: Harga jual lebih rendah atau sama dengan harga modal (Margin: <strong class="font-mono tabular-nums">${margin.toFixed(
             1
           )}%</strong>).`;
         } else {
@@ -396,9 +379,9 @@ export function openProductFormModal(ctx, productId = null) {
         const stock = Math.max(0, parseInt(document.getElementById('prod-stock')?.value || '0', 10) || 0);
         const costPrice = Math.max(100, parseInt(document.getElementById('prod-cost')?.value || '0', 10) || 0);
         const sellPrice = Math.max(100, parseInt(document.getElementById('prod-sell')?.value || '0', 10) || 0);
-        const dailySalesAvg = Math.max(1, parseInt(document.getElementById('prod-daily')?.value || '1', 10) || 1);
-        const leadTimeDays = Math.max(1, parseInt(document.getElementById('prod-lead')?.value || '1', 10) || 1);
-        const safetyStock = Math.max(0, parseInt(document.getElementById('prod-safety')?.value || '0', 10) || 0);
+        const safetyStock = Math.max(1, parseInt(document.getElementById('prod-safety')?.value || '5', 10) || 5);
+        const dailySalesAvg = existing?.dailySalesAvg || 2;
+        const leadTimeDays = existing?.leadTimeDays || 2;
 
         if (!name) {
           showToast('Nama produk wajib diisi.', 'error');

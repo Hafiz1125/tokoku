@@ -1,6 +1,6 @@
 import { renderIcon } from '../icons.js';
 import { showToast } from '../ui.js';
-import { calculateROP, escapeHTML, formatRupiah } from '../utils.js';
+import { escapeHTML, formatRupiah, getMinStockThreshold } from '../utils.js';
 
 export function renderStockCards(ctx) {
   const { appState } = ctx;
@@ -12,9 +12,13 @@ export function renderStockCards(ctx) {
   const query = searchEl instanceof HTMLInputElement ? searchEl.value.trim().toLowerCase() : '';
   const statusFilter = statusEl instanceof HTMLSelectElement ? statusEl.value : 'ALL';
 
+  const countSummaryEl = document.getElementById('stock-summary-count');
+  const lowSummaryEl = document.getElementById('stock-summary-low');
+  const assetSummaryEl = document.getElementById('stock-summary-asset');
+
   const filtered = appState.products.filter((p) => {
-    const rop = calculateROP(p);
-    const needsRestock = p.stock <= rop;
+    const minStock = getMinStockThreshold(p);
+    const needsRestock = p.stock <= minStock;
     const matchQuery =
       !query ||
       p.name.toLowerCase().includes(query) ||
@@ -25,6 +29,21 @@ export function renderStockCards(ctx) {
       (statusFilter === 'SAFE' && !needsRestock);
     return matchQuery && matchStatus;
   });
+
+  if (countSummaryEl) {
+    countSummaryEl.textContent = `${filtered.length} barang`;
+  }
+  if (lowSummaryEl) {
+    const lowCount = filtered.filter((p) => p.stock <= getMinStockThreshold(p)).length;
+    lowSummaryEl.textContent = `${lowCount} barang`;
+    lowSummaryEl.className = `text-sm sm:text-base font-extrabold font-mono tabular-nums ${
+      lowCount > 0 ? 'text-amber-700' : 'text-emerald-700'
+    }`;
+  }
+  if (assetSummaryEl) {
+    const totalAsset = filtered.reduce((sum, p) => sum + p.stock * p.costPrice, 0);
+    assetSummaryEl.textContent = formatRupiah(totalAsset);
+  }
 
   if (appState.products.length === 0) {
     grid.innerHTML = `
@@ -46,75 +65,116 @@ export function renderStockCards(ctx) {
 
   grid.innerHTML = filtered
     .map((p) => {
-      const rop = calculateROP(p);
-      const needsRestock = p.stock <= rop;
-      const recommendedQty = Math.max(10, rop * 2 - p.stock);
+      const safeId = escapeHTML(p.id);
+      const minStock = getMinStockThreshold(p);
+      const needsRestock = p.stock <= minStock;
+      const assetVal = p.stock * p.costPrice;
+      const recommendedQty = Math.max(10, minStock * 3 - p.stock);
+
+      let statusHTML = `<span class="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 shrink-0">${renderIcon(
+        'check-circle',
+        'w-3.5 h-3.5 text-emerald-600'
+      )} Stok Aman</span>`;
+
+      if (p.stock === 0) {
+        statusHTML = `<span class="inline-flex items-center gap-1 text-xs font-bold text-rose-700 shrink-0">${renderIcon(
+          'alert-circle',
+          'w-3.5 h-3.5 text-rose-600'
+        )} Habis (0)</span>`;
+      } else if (needsRestock) {
+        statusHTML = `<span class="inline-flex items-center gap-1 text-xs font-bold text-amber-800 shrink-0">${renderIcon(
+          'alert-triangle',
+          'w-3.5 h-3.5 text-amber-600'
+        )} Perlu Restock</span>`;
+      }
 
       return `
         <article class="bg-white rounded-2xl border ${
           needsRestock ? 'border-amber-400' : 'border-slate-200'
         } p-5 flex flex-col justify-between gap-4">
-          <div>
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0">
-                <span class="text-xs font-medium text-slate-500">${escapeHTML(p.category)}</span>
-                <h4 class="font-bold text-slate-900 text-base truncate">${escapeHTML(p.name)}</h4>
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <span class="text-xs font-medium text-slate-500">${escapeHTML(p.category || 'Umum')}</span>
+              <h4 class="font-bold text-slate-900 text-base truncate">${escapeHTML(p.name)}</h4>
+            </div>
+            ${statusHTML}
+          </div>
+
+          <div class="pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+            <div class="min-w-0">
+              <div class="text-xs font-medium text-slate-500">Sisa Stock Saat Ini</div>
+              <div class="flex items-baseline gap-2 mt-0.5 flex-wrap">
+                <span class="text-2xl font-extrabold font-mono tabular-nums text-slate-900">${p.stock}</span>
+                <span class="text-xs font-semibold text-slate-500">unit</span>
+                <span aria-hidden="true" class="text-slate-300">&middot;</span>
+                <span class="text-xs text-slate-500 font-mono tabular-nums">Min. ${minStock} unit</span>
               </div>
-              ${
-                needsRestock
-                  ? `<span class="inline-flex items-center gap-1 text-xs font-bold text-amber-800 shrink-0">${renderIcon(
-                      'alert-triangle',
-                      'w-3.5 h-3.5 text-amber-600'
-                    )} Perlu Restock</span>`
-                  : `<span class="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 shrink-0">${renderIcon(
-                      'check-circle',
-                      'w-3.5 h-3.5 text-emerald-600'
-                    )} Stok Aman</span>`
-              }
+              <div class="text-xs text-slate-500 mt-1 font-mono tabular-nums">
+                Modal stok: <strong class="text-slate-800">${formatRupiah(assetVal)}</strong>
+                <span class="text-slate-400">(${formatRupiah(p.costPrice)}/unit)</span>
+              </div>
             </div>
 
-            <div class="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5 text-slate-600">
-              <div class="flex justify-between">
-                <span>Stok Saat Ini</span>
-                <strong class="font-mono tabular-nums text-slate-900">${p.stock} unit</strong>
-              </div>
-              <div class="flex justify-between">
-                <span>Titik Pesan Ulang (ROP)</span>
-                <strong class="font-mono tabular-nums text-teal-700">${rop} unit</strong>
-              </div>
-              <div class="flex justify-between">
-                <span>Harga Beli (HPP) / unit</span>
-                <strong class="font-mono tabular-nums text-slate-800">${formatRupiah(p.costPrice)}</strong>
-              </div>
-              <div class="text-[11px] text-slate-500 pt-1.5 border-t border-slate-200 font-mono tabular-nums">
-                ROP = (${p.dailySalesAvg}/hari &times; ${p.leadTimeDays} hari) + ${p.safetyStock} safety
-              </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                data-action="quick-stock-step"
+                data-id="${safeId}"
+                data-delta="-1"
+                aria-label="Kurangi 1 stok ${escapeHTML(p.name)}"
+                title="Kurangi 1 unit"
+                ${p.stock <= 0 ? 'disabled' : ''}
+                class="w-9 h-9 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-base hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer shrink-0"
+              >
+                &minus;
+              </button>
+              <button
+                type="button"
+                data-action="quick-stock-step"
+                data-id="${safeId}"
+                data-delta="1"
+                aria-label="Tambah 1 stok ${escapeHTML(p.name)}"
+                title="Tambah 1 unit"
+                class="w-9 h-9 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-base hover:bg-teal-50 hover:border-teal-300 hover:text-teal-700 transition cursor-pointer shrink-0"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                data-action="open-adjust-stock"
+                data-id="${safeId}"
+                class="px-3 h-9 inline-flex items-center gap-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-teal-700 hover:text-white text-slate-700 transition cursor-pointer whitespace-nowrap shrink-0"
+              >
+                ${renderIcon('edit-3', 'w-3.5 h-3.5')}
+                <span>Atur</span>
+              </button>
             </div>
           </div>
 
-          <div class="space-y-2.5 pt-2 border-t border-slate-200">
-            <div class="grid grid-cols-2 gap-2">
+          <div class="space-y-2.5 pt-3 border-t border-slate-200">
+            <div class="text-xs font-semibold text-slate-700">Tambah Stock Masuk (Grosir / Sales)</div>
+            <div class="grid grid-cols-2 gap-2.5">
               <div class="min-w-0">
-                <label for="restock-qty-${escapeHTML(p.id)}" class="block text-[11px] font-semibold text-slate-600 mb-1">
+                <label for="restock-qty-${safeId}" class="block text-[11px] font-semibold text-slate-600 mb-1">
                   Jumlah Masuk (Saran: +${recommendedQty})
                 </label>
                 <input
                   type="number"
-                  id="restock-qty-${escapeHTML(p.id)}"
-                  data-restock-input="${escapeHTML(p.id)}"
+                  id="restock-qty-${safeId}"
+                  data-restock-input="${safeId}"
                   min="1"
                   value="${recommendedQty}"
                   class="w-full px-3 py-2 min-h-[40px] border border-slate-300 rounded-xl text-sm font-semibold font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-600"
                 />
               </div>
               <div class="min-w-0">
-                <label for="restock-price-${escapeHTML(p.id)}" class="block text-[11px] font-semibold text-slate-600 mb-1">
+                <label for="restock-price-${safeId}" class="block text-[11px] font-semibold text-slate-600 mb-1">
                   Harga Beli / Item (Rp)
                 </label>
                 <input
                   type="number"
-                  id="restock-price-${escapeHTML(p.id)}"
-                  data-restock-input="${escapeHTML(p.id)}"
+                  id="restock-price-${safeId}"
+                  data-restock-input="${safeId}"
                   min="0"
                   step="100"
                   value="${p.costPrice}"
@@ -122,17 +182,17 @@ export function renderStockCards(ctx) {
                 />
               </div>
             </div>
-            <div class="flex items-center justify-between gap-2 pt-1">
+            <div class="flex items-center justify-between gap-2 pt-0.5">
               <div class="text-xs text-slate-600">
                 Subtotal:
-                <strong id="restock-subtotal-${escapeHTML(p.id)}" class="font-mono tabular-nums text-amber-700">${formatRupiah(
+                <strong id="restock-subtotal-${safeId}" class="font-mono tabular-nums text-amber-700">${formatRupiah(
                   recommendedQty * p.costPrice
                 )}</strong>
               </div>
               <button
                 type="button"
                 data-action="execute-restock"
-                data-id="${escapeHTML(p.id)}"
+                data-id="${safeId}"
                 class="px-4 py-2 min-h-[40px] bg-teal-700 hover:bg-teal-800 text-white text-sm font-bold rounded-xl transition shrink-0 whitespace-nowrap cursor-pointer"
               >
                 + Tambah Stok
@@ -171,7 +231,7 @@ export function executeRestock(ctx, productId) {
   }
 
   const totalCost = qty * unitPrice;
-  const wasBelowROP = prod.stock <= calculateROP(prod);
+  const wasLowStock = prod.stock <= getMinStockThreshold(prod);
   prod.stock += qty;
 
   recordDailyTransaction({
@@ -189,8 +249,8 @@ export function executeRestock(ctx, productId) {
   persistAndRefresh();
   showToast(`Berhasil menambah +${qty} stok ${prod.name} (${formatRupiah(totalCost)}).`, 'success');
 
-  if (wasBelowROP) {
-    awardXP(25, 'Menambah stok tepat waktu saat menyentuh titik ROP');
+  if (wasLowStock) {
+    awardXP(25, 'Menambah stok tepat waktu saat stok menipis');
     unlockBadge('stock_master');
   }
 }

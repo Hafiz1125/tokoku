@@ -20,6 +20,7 @@ import {
   archiveAndRolloverIfMidnight,
   exportTransactionsCSV,
   openBackupRestoreModal,
+  openCalendarDayPickerModal,
   openDailyClosingModal,
   openEditTodayIncomeModal,
   openStartNewDayModal,
@@ -30,8 +31,9 @@ import {
   openProductFormModal,
   renderProductsGrid
 } from './js/modules/produk.js';
-import { openAuditStockModal, renderSisaStock } from './js/modules/sisa.js';
+import { openAdjustStockModal, quickAdjustStock, renderSisaStock } from './js/modules/sisa.js';
 import { executeRestock, renderStockCards, updateRestockSubtotal } from './js/modules/stock.js';
+import { renderAnnualReport } from './js/modules/tahunan.js';
 import { normalizeState } from './js/storage.js';
 import {
   closeModal,
@@ -47,7 +49,22 @@ import { getLevelInfo } from './js/utils.js';
 let appState = getDefaultState();
 let activeTab = 'produk';
 let authController = null;
+let hasPendingStoreSync = false;
 const posCart = {};
+
+function syncStoreNow(showErrorToast = false) {
+  if (!getAuthToken()) return;
+  hasPendingStoreSync = true;
+  saveStoreToServer(appState)
+    .then(() => {
+      hasPendingStoreSync = false;
+    })
+    .catch((err) => {
+      if (showErrorToast) {
+        showToast(err instanceof Error ? err.message : 'Gagal menyinkronkan data ke server.', 'error');
+      }
+    });
+}
 
 function showAuthScreen() {
   const authScreen = document.getElementById('auth-screen');
@@ -76,17 +93,13 @@ function renderActiveTab() {
     renderCart(ctx);
   }
   if (activeTab === 'laporan') renderDailyTransactions(ctx);
+  if (activeTab === 'tahunan') renderAnnualReport(ctx);
 }
 
 function persistAndRefresh() {
   updateHeaderAndGamificationUI(appState, getCurrentUser());
   renderActiveTab();
-
-  if (getAuthToken()) {
-    saveStoreToServer(appState).catch((err) => {
-      showToast(err instanceof Error ? err.message : 'Gagal menyinkronkan data ke server.', 'error');
-    });
-  }
+  syncStoreNow(true);
 }
 
 function replaceState(nextState) {
@@ -143,9 +156,7 @@ function awardXP(amount, reasonText) {
   const newLevelInfo = getLevelInfo(appState.gamification.xp);
 
   updateHeaderAndGamificationUI(appState, getCurrentUser());
-  if (getAuthToken()) {
-    saveStoreToServer(appState).catch(() => {});
-  }
+  syncStoreNow(false);
   showToast(`+${amount} XP: ${reasonText}`, 'xp');
 
   if (newLevelInfo.level > oldLevel) {
@@ -163,9 +174,7 @@ function unlockBadge(badgeId) {
     appState.gamification.unlockedBadges.push(badgeId);
     const badge = BADGE_DEFINITIONS.find((b) => b.id === badgeId);
     updateHeaderAndGamificationUI(appState, getCurrentUser());
-    if (getAuthToken()) {
-      saveStoreToServer(appState).catch(() => {});
-    }
+    syncStoreNow(false);
     if (badge) {
       setTimeout(() => {
         showToast(`Lencana Terbuka: ${badge.title}!`, 'success');
@@ -346,9 +355,18 @@ function wireStaticListeners() {
   document.getElementById('stock-cards-grid')?.addEventListener('click', (event) => {
     const target = event.target instanceof Element ? event.target.closest('[data-action]') : null;
     if (!target) return;
-    if (target.getAttribute('data-action') === 'execute-restock') {
-      const id = target.getAttribute('data-id');
-      if (id) executeRestock(ctx, id);
+    const action = target.getAttribute('data-action');
+    const id = target.getAttribute('data-id');
+    if (!id) return;
+    if (action === 'execute-restock') {
+      executeRestock(ctx, id);
+    }
+    if (action === 'quick-stock-step') {
+      const delta = parseInt(target.getAttribute('data-delta') || '0', 10) || 0;
+      quickAdjustStock(ctx, id, delta);
+    }
+    if (action === 'open-adjust-stock' || action === 'open-audit') {
+      openAdjustStockModal(ctx, id);
     }
   });
   document.getElementById('stock-cards-grid')?.addEventListener('input', (event) => {
@@ -382,13 +400,19 @@ function wireStaticListeners() {
   document.getElementById('pos-discount-input')?.addEventListener('input', () => renderCart(ctx));
   document.getElementById('pos-checkout-btn')?.addEventListener('click', () => checkoutCart(ctx));
 
-  // Tab 4: Sisa Stock
+  // Tab 4: Sisa Stock & Penyesuaian Cepat (fallback bila tabel digunakan)
   document.getElementById('sisa-stock-table-body')?.addEventListener('click', (event) => {
     const target = event.target instanceof Element ? event.target.closest('[data-action]') : null;
     if (!target) return;
-    if (target.getAttribute('data-action') === 'open-audit') {
-      const id = target.getAttribute('data-id');
-      if (id) openAuditStockModal(ctx, id);
+    const action = target.getAttribute('data-action');
+    const id = target.getAttribute('data-id');
+    if (!id) return;
+    if (action === 'quick-stock-step') {
+      const delta = parseInt(target.getAttribute('data-delta') || '0', 10) || 0;
+      quickAdjustStock(ctx, id, delta);
+    }
+    if (action === 'open-adjust-stock' || action === 'open-audit') {
+      openAdjustStockModal(ctx, id);
     }
   });
 
@@ -409,8 +433,53 @@ function wireStaticListeners() {
     }
     renderDailyTransactions(ctx);
   });
+  document.getElementById('monthly-day-picker-btn')?.addEventListener('click', () => openCalendarDayPickerModal(ctx));
+  document.getElementById('laporan-day-picker-btn')?.addEventListener('click', () => openCalendarDayPickerModal(ctx));
   document.getElementById('add-expense-btn')?.addEventListener('click', () => openEditTodayIncomeModal(ctx));
   document.getElementById('edit-today-income-btn')?.addEventListener('click', () => openEditTodayIncomeModal(ctx));
+  document.getElementById('goto-tahunan-btn')?.addEventListener('click', () => switchTab('tahunan'));
+
+  // Tab 5: Rekap Tahunan
+  document.getElementById('annual-year-filter')?.addEventListener('change', () => renderAnnualReport(ctx));
+  document.getElementById('tab-tahunan')?.addEventListener('click', (event) => {
+    const target = event.target instanceof Element ? event.target.closest('[data-action]') : null;
+    if (!target) return;
+    const action = target.getAttribute('data-action');
+    if (action === 'select-annual-year') {
+      const year = target.getAttribute('data-year');
+      const yearFilterEl = document.getElementById('annual-year-filter');
+      if (year && yearFilterEl instanceof HTMLSelectElement) {
+        yearFilterEl.value = year;
+        renderAnnualReport(ctx);
+      }
+    }
+    if (action === 'open-month-in-daily') {
+      const dayVal = target.getAttribute('data-day');
+      const dayFilterEl = document.getElementById('laporan-day-filter');
+      const monthlyDaySelect = document.getElementById('monthly-day-select');
+      if (dayVal) {
+        if (dayFilterEl instanceof HTMLSelectElement) {
+          if (![...dayFilterEl.options].some((o) => o.value === dayVal)) {
+            const opt = document.createElement('option');
+            opt.value = dayVal;
+            opt.textContent = dayVal;
+            dayFilterEl.appendChild(opt);
+          }
+          dayFilterEl.value = dayVal;
+        }
+        if (monthlyDaySelect instanceof HTMLSelectElement) {
+          if (![...monthlyDaySelect.options].some((o) => o.value === dayVal)) {
+            const opt = document.createElement('option');
+            opt.value = dayVal;
+            opt.textContent = dayVal;
+            monthlyDaySelect.appendChild(opt);
+          }
+          monthlyDaySelect.value = dayVal;
+        }
+      }
+      switchTab('laporan');
+    }
+  });
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
@@ -459,7 +528,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   }, 1000);
 
   window.addEventListener('pagehide', () => {
-    if (getAuthToken()) {
+    if (hasPendingStoreSync && getAuthToken()) {
       saveStoreToServer(appState, { keepalive: true }).catch(() => {});
     }
   });

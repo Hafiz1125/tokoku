@@ -215,9 +215,9 @@ export function renderCart(ctx) {
       profitEl.textContent = `${formatRupiah(netProfit)} (RUGI)`;
       profitEl.className = 'font-mono tabular-nums text-rose-700 font-extrabold';
       warningBox.classList.remove('hidden');
-      warningBox.innerHTML = `<strong>Peringatan Ilmiah:</strong> Diskon ${discountPercent}% membuat harga jual (${formatRupiah(
+      warningBox.innerHTML = `<strong>Peringatan Rugi:</strong> Diskon ${discountPercent}% membuat harga jual (${formatRupiah(
         finalTotal
-      )}) lebih rendah daripada total modal HPP (${formatRupiah(totalCost)}).`;
+      )}) lebih rendah daripada total harga modal (${formatRupiah(totalCost)}).`;
     } else {
       profitEl.textContent = `+ ${formatRupiah(netProfit)}`;
       profitEl.className = 'font-mono tabular-nums text-emerald-700 font-bold';

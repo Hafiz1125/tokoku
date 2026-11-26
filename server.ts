@@ -298,7 +298,7 @@ async function startServer() {
 
   app.put('/api/store', requireAuth, (req: AuthenticatedRequest, res) => {
     const authUser = req.authUser!;
-    const body = req.body as { storeState?: unknown };
+    const body = req.body as { storeState?: unknown; syncSource?: string };
     if (!body || !body.storeState || typeof body.storeState !== 'object') {
       res.status(400).json({ error: 'Format data toko tidak valid.' });
       return;
@@ -309,6 +309,22 @@ async function startServer() {
     const idx = db.users.findIndex((u) => u.id === authUser.id);
     if (idx === -1) {
       res.status(404).json({ error: 'Akun pengguna tidak ditemukan.' });
+      return;
+    }
+
+    const existingState = db.users[idx].storeState;
+    const existingDay = existingState?.dailySession?.dayNumber || 1;
+    const incomingDay = normalized.dailySession.dayNumber || 1;
+    const isPagehideOrLegacyUnload =
+      body.syncSource === 'pagehide' ||
+      (body.syncSource !== 'action' && existingDay >= 30 && incomingDay < existingDay);
+
+    if (isPagehideOrLegacyUnload && incomingDay < existingDay) {
+      res.json({
+        ok: true,
+        user: toPublicUser(db.users[idx]),
+        storeState: normalizeState(existingState)
+      });
       return;
     }
 

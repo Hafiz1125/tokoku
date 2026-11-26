@@ -11,7 +11,7 @@ import {
   getLocalTimezoneCode
 } from '../utils.js';
 
-function parseRestockItemInfo(trx, products = []) {
+export function parseRestockItemInfo(trx, products = []) {
   let qty = Number(trx.qty);
   let productName = trx.productName;
   if (!Number.isFinite(qty) || qty <= 0 || !productName) {
@@ -36,6 +36,134 @@ function parseRestockItemInfo(trx, products = []) {
   return { key, name: finalName, qty: qty || 0, unitPrice, totalCost };
 }
 
+export const CALENDAR_MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+const ID_MONTH_MAP = {
+  jan: 1,
+  feb: 2,
+  mar: 3,
+  apr: 4,
+  mei: 5,
+  may: 5,
+  jun: 6,
+  jul: 7,
+  agu: 8,
+  aug: 8,
+  sep: 9,
+  okt: 10,
+  oct: 10,
+  nov: 11,
+  des: 12,
+  dec: 12
+};
+
+function parseIndonesianDateToKey(dateStr) {
+  const match = String(dateStr || '')
+    .trim()
+    .match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
+  if (!match) return '';
+  const day = parseInt(match[1], 10);
+  const month = ID_MONTH_MAP[match[2].toLowerCase()];
+  const year = parseInt(match[3], 10);
+  if (!day || !month || !year) return '';
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function formatDateKeyToShort(dateKey) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ''))) return '';
+  const [y, m, d] = dateKey.split('-').map((n) => parseInt(n, 10));
+  const parsed = new Date(y, m - 1, d, 12, 0, 0);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function shiftDateKey(dateKey, deltaDays) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ''))) return '';
+  const [y, m, d] = dateKey.split('-').map((n) => parseInt(n, 10));
+  const shifted = new Date(y, m - 1, d + deltaDays, 12, 0, 0);
+  return getLocalDateKey(shifted);
+}
+
+export function buildDayDateIndex(appState) {
+  const session = appState.dailySession;
+  const dayNumbers = new Set([session.dayNumber]);
+  const dayToDateKey = new Map();
+
+  if (session.dateKey && /^\d{4}-\d{2}-\d{2}$/.test(session.dateKey)) {
+    dayToDateKey.set(session.dayNumber, session.dateKey);
+  }
+
+  (appState.dailyHistoryArchive || []).forEach((a) => {
+    const d = Number(a.dayNumber);
+    if (!Number.isFinite(d) || d < 1) return;
+    dayNumbers.add(d);
+    if (!dayToDateKey.has(d)) {
+      const key =
+        a.dateKey && /^\d{4}-\d{2}-\d{2}$/.test(a.dateKey)
+          ? a.dateKey
+          : parseIndonesianDateToKey(a.date);
+      if (key) dayToDateKey.set(d, key);
+    }
+  });
+
+  (appState.transactions || []).forEach((t) => {
+    const d = t.dayNumber || 1;
+    dayNumbers.add(d);
+    if (!dayToDateKey.has(d) && t.date) {
+      const key = parseIndonesianDateToKey(t.date);
+      if (key) dayToDateKey.set(d, key);
+    }
+  });
+
+  if (appState.dailyAdjustments && typeof appState.dailyAdjustments === 'object') {
+    Object.keys(appState.dailyAdjustments).forEach((k) => {
+      const n = Number(k);
+      if (Number.isFinite(n) && n >= 1) dayNumbers.add(n);
+    });
+  }
+
+  const anchorKey = dayToDateKey.get(session.dayNumber) || getLocalDateKey();
+  dayNumbers.forEach((d) => {
+    if (!dayToDateKey.has(d) && anchorKey) {
+      dayToDateKey.set(d, shiftDateKey(anchorKey, d - session.dayNumber));
+    }
+  });
+
+  const sortedDaysAsc = Array.from(dayNumbers).sort((a, b) => a - b);
+  const sortedDaysDesc = [...sortedDaysAsc].reverse();
+
+  const dateKeyToDay = new Map();
+  const dayDateLabelMap = new Map();
+  sortedDaysAsc.forEach((d) => {
+    const key = dayToDateKey.get(d);
+    if (key) {
+      dateKeyToDay.set(key, d);
+      dayDateLabelMap.set(d, formatDateKeyToShort(key));
+    }
+  });
+
+  return { dayNumbers, sortedDaysAsc, sortedDaysDesc, dayToDateKey, dateKeyToDay, dayDateLabelMap };
+}
+
+function getSelectionDateLabel(selectedFilter, session, dayDateLabelMap) {
+  if (selectedFilter === 'ALL') {
+    return 'Semua Tanggal';
+  }
+  const targetDay =
+    selectedFilter === 'CURRENT' ? session.dayNumber : Number(selectedFilter) || session.dayNumber;
+  const dateLabel = dayDateLabelMap.get(targetDay) || formatDateKeyToShort(session.dateKey || getLocalDateKey());
+  return dateLabel || `Hari #${targetDay}`;
+}
+
+function getSelectionDayNumberLabel(selectedFilter, session) {
+  if (selectedFilter === 'ALL') {
+    return 'Semua Hari';
+  }
+  const targetDay =
+    selectedFilter === 'CURRENT' ? session.dayNumber : Number(selectedFilter) || session.dayNumber;
+  return targetDay === session.dayNumber ? `Hari #${targetDay} (Aktif)` : `Hari #${targetDay}`;
+}
+
 export function renderDailyTransactions(ctx) {
   const { appState } = ctx;
   const listEl = document.getElementById('daily-transactions-list');
@@ -48,47 +176,21 @@ export function renderDailyTransactions(ctx) {
   const countBadge = document.getElementById('daily-trx-count-badge');
   const dayFilterEl = document.getElementById('laporan-day-filter');
 
-  const dayNumbers = new Set([session.dayNumber]);
-  const dayDateMap = new Map();
-  appState.transactions.forEach((t) => {
-    const d = t.dayNumber || 1;
-    dayNumbers.add(d);
-    if (t.date && !dayDateMap.has(d)) dayDateMap.set(d, t.date);
-  });
-  appState.dailyHistoryArchive.forEach((a) => {
-    dayNumbers.add(a.dayNumber);
-    if (a.date && !dayDateMap.has(a.dayNumber)) dayDateMap.set(a.dayNumber, a.date);
-  });
-  if (session.dateKey && !dayDateMap.has(session.dayNumber)) {
-    const parsed = new Date(`${session.dateKey}T12:00:00`);
-    if (!Number.isNaN(parsed.getTime())) {
-      dayDateMap.set(
-        session.dayNumber,
-        parsed.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
-      );
-    }
-  }
-  if (appState.dailyAdjustments && typeof appState.dailyAdjustments === 'object') {
-    Object.keys(appState.dailyAdjustments).forEach((k) => {
-      const n = Number(k);
-      if (Number.isFinite(n) && n >= 1) dayNumbers.add(n);
-    });
-  }
-  const sortedDaysDesc = Array.from(dayNumbers).sort((a, b) => b - a);
-  const sortedDaysAsc = Array.from(dayNumbers).sort((a, b) => a - b);
+  const { dayNumbers: recordedDays, sortedDaysAsc, sortedDaysDesc, dayToDateKey, dayDateLabelMap } =
+    buildDayDateIndex(appState);
 
   if (dayFilterEl instanceof HTMLSelectElement) {
     const prevVal = dayFilterEl.value || 'CURRENT';
-    const currentDateLabel = dayDateMap.get(session.dayNumber);
+    const currentDateLabel = dayDateLabelMap.get(session.dayNumber) || formatDateKeyToShort(session.dateKey || getLocalDateKey());
 
     dayFilterEl.innerHTML = `
-      <option value="CURRENT">Hari #${session.dayNumber} (Aktif${currentDateLabel ? ` · ${currentDateLabel}` : ''})</option>
-      <option value="ALL">Semua Hari (Gabungan Bulanan)</option>
+      <option value="CURRENT">${escapeHTML(currentDateLabel)}</option>
+      <option value="ALL">Semua Tanggal</option>
       ${sortedDaysDesc
         .filter((d) => d !== session.dayNumber)
         .map((d) => {
-          const dt = dayDateMap.get(d);
-          return `<option value="${d}">Riwayat Hari #${d}${dt ? ` · ${dt}` : ''}</option>`;
+          const dt = dayDateLabelMap.get(d) || `Hari #${d}`;
+          return `<option value="${d}">${escapeHTML(dt)}</option>`;
         })
         .join('')}
     `;
@@ -98,6 +200,16 @@ export function renderDailyTransactions(ctx) {
   }
 
   const selectedFilter = dayFilterEl instanceof HTMLSelectElement ? dayFilterEl.value : 'CURRENT';
+  const pickerDateLabel = getSelectionDateLabel(selectedFilter, session, dayDateLabelMap);
+  const pickerDayLabel = getSelectionDayNumberLabel(selectedFilter, session);
+  const monthlyPickerLabelEl = document.getElementById('monthly-day-picker-label');
+  const laporanPickerLabelEl = document.getElementById('laporan-day-picker-label');
+  const monthlySelectedDayEl = document.getElementById('monthly-selected-day-label');
+  const laporanSelectedDayEl = document.getElementById('laporan-selected-day-label');
+  if (monthlyPickerLabelEl) monthlyPickerLabelEl.textContent = pickerDateLabel;
+  if (laporanPickerLabelEl) laporanPickerLabelEl.textContent = pickerDateLabel;
+  if (monthlySelectedDayEl) monthlySelectedDayEl.textContent = pickerDayLabel;
+  if (laporanSelectedDayEl) laporanSelectedDayEl.textContent = pickerDayLabel;
 
   const filteredTransactions = appState.transactions.filter((t) => {
     const tDay = t.dayNumber || 1;
@@ -113,10 +225,10 @@ export function renderDailyTransactions(ctx) {
   if (statusPill && openedInfo) {
     if (session.isOpen) {
       statusPill.className = 'text-xs font-bold text-emerald-700';
-      statusPill.textContent = `Hari #${session.dayNumber} · Toko Buka`;
+      statusPill.textContent = `Toko Buka · Hari #${session.dayNumber}`;
     } else {
       statusPill.className = 'text-xs font-bold text-rose-700';
-      statusPill.textContent = `Hari #${session.dayNumber} · Toko Tutup`;
+      statusPill.textContent = `Toko Tutup · Hari #${session.dayNumber}`;
     }
     updateRealtimeClockAndShiftUI(appState);
   }
@@ -136,71 +248,84 @@ export function renderDailyTransactions(ctx) {
     }
   }
 
-  let monthlySales = 0;
-  let monthlyRestock = 0;
-  let monthlyRestockQty = 0;
-  const monthlyRestockItems = new Set();
-  const recordedDays = new Set([session.dayNumber]);
+  const selectedMonthlyDay =
+    selectedFilter === 'CURRENT' || selectedFilter === 'ALL'
+      ? session.dayNumber
+      : Number(selectedFilter) || session.dayNumber;
+
+  const anchorDateKey = dayToDateKey.get(selectedMonthlyDay) || session.dateKey || getLocalDateKey();
+  const targetYear = anchorDateKey ? anchorDateKey.slice(0, 4) : String(new Date().getFullYear());
+  const targetMonthKey = anchorDateKey ? anchorDateKey.slice(0, 7) : getLocalDateKey().slice(0, 7);
+  const targetMonthIdx = Math.max(0, Math.min(11, (parseInt(targetMonthKey.slice(5, 7), 10) || 1) - 1));
+  const targetMonthLabel = `${CALENDAR_MONTH_NAMES[targetMonthIdx]} ${targetYear}`;
+
+  let allTimeSales = 0;
+  let allTimeExpense = 0;
+  let allTimeRestock = 0;
+  let allTimeRestockQty = 0;
+  const allTimeRestockItems = new Set();
+
+  let monthSales = 0;
+  let monthGrossProfit = 0;
+  let monthExpense = 0;
+  let monthRestock = 0;
+  let monthRestockQty = 0;
+  const monthRestockItems = new Set();
 
   appState.transactions.forEach((trx) => {
-    recordedDays.add(trx.dayNumber || 1);
+    const tDay = trx.dayNumber || 1;
+    const tDateKey = dayToDateKey.get(tDay) || '';
+    const isTargetMonth = tDateKey.startsWith(targetMonthKey);
+
     if (trx.type === 'SALE') {
-      monthlySales += trx.amount;
+      const amt = Number(trx.amount) || 0;
+      const prf = Number(trx.profit) || 0;
+      allTimeSales += amt;
+      if (isTargetMonth) {
+        monthSales += amt;
+        monthGrossProfit += prf;
+      }
     } else if (trx.type === 'RESTOCK') {
-      monthlyRestock += Number(trx.amount) || 0;
+      const amt = Number(trx.amount) || 0;
       const info = parseRestockItemInfo(trx, appState.products);
-      monthlyRestockQty += info.qty;
-      monthlyRestockItems.add(info.key);
+      allTimeRestock += amt;
+      allTimeRestockQty += info.qty;
+      allTimeRestockItems.add(info.key);
+      if (isTargetMonth) {
+        monthRestock += amt;
+        monthRestockQty += info.qty;
+        monthRestockItems.add(info.key);
+      }
     }
   });
 
-  let totalDailyExpense = 0;
   if (appState.dailyAdjustments && typeof appState.dailyAdjustments === 'object') {
     Object.entries(appState.dailyAdjustments).forEach(([k, adj]) => {
       const dayNum = Number(k);
-      if (Number.isFinite(dayNum) && dayNum >= 1) {
-        recordedDays.add(dayNum);
+      const exp = Number(adj?.expense) || 0;
+      allTimeExpense += exp;
+      const dDateKey = Number.isFinite(dayNum) ? dayToDateKey.get(dayNum) || '' : '';
+      if (dDateKey.startsWith(targetMonthKey)) {
+        monthExpense += exp;
       }
-      totalDailyExpense += Number(adj?.expense) || 0;
     });
   }
 
-  const monthlyNetIncome = monthlySales - totalDailyExpense;
+  const allTimeNetIncome = allTimeSales - allTimeExpense;
+  const monthNetIncome = monthSales - monthExpense;
+  const monthNetProfit = monthGrossProfit - monthExpense;
 
   const daysBadge = document.getElementById('monthly-days-badge');
-  const mSales = document.getElementById('monthly-total-sales');
-  const mSalesNote = document.getElementById('monthly-total-sales-note');
   if (daysBadge) daysBadge.textContent = `Total ${recordedDays.size} Hari Tercatat`;
-  if (mSales) {
-    mSales.textContent = formatRupiah(monthlyNetIncome);
-    mSales.className = `text-xl sm:text-2xl font-extrabold font-mono tabular-nums mt-1 block ${
-      monthlyNetIncome >= 0 ? 'text-white' : 'text-rose-300'
-    }`;
-  }
-  if (mSalesNote) {
-    if (totalDailyExpense > 0) {
-      mSalesNote.textContent = `Omzet ${formatRupiah(monthlySales)} · Uang keluar -${formatRupiah(totalDailyExpense)}`;
-    } else if (totalDailyExpense < 0) {
-      mSalesNote.textContent = `Omzet ${formatRupiah(monthlySales)} · Penambahan +${formatRupiah(
-        Math.abs(totalDailyExpense)
-      )}`;
-    } else {
-      mSalesNote.textContent = 'Gabungan pemasukan harian dari Hari #1 s/d sekarang';
-    }
-  }
 
   const monthlyDaySelect = document.getElementById('monthly-day-select');
   if (monthlyDaySelect instanceof HTMLSelectElement) {
     const dayOptions = sortedDaysAsc.map((d) => {
       const val = d === session.dayNumber ? 'CURRENT' : String(d);
-      const dt = dayDateMap.get(d);
-      const label =
-        d === session.dayNumber
-          ? `Hari #${d} (Aktif${dt ? ` · ${dt}` : ''})`
-          : `Hari #${d}${dt ? ` · ${dt}` : ''}`;
-      return `<option value="${val}">${label}</option>`;
+      const dt = dayDateLabelMap.get(d) || `Hari #${d}`;
+      return `<option value="${val}">${escapeHTML(dt)}</option>`;
     });
-    dayOptions.push('<option value="ALL">Semua Hari</option>');
+    dayOptions.push('<option value="ALL">Semua Tanggal</option>');
     monthlyDaySelect.innerHTML = dayOptions.join('');
 
     if ([...monthlyDaySelect.options].some((o) => o.value === selectedFilter)) {
@@ -209,11 +334,6 @@ export function renderDailyTransactions(ctx) {
       monthlyDaySelect.value = 'CURRENT';
     }
   }
-
-  const selectedMonthlyDay =
-    selectedFilter === 'CURRENT' || selectedFilter === 'ALL'
-      ? session.dayNumber
-      : Number(selectedFilter) || session.dayNumber;
 
   let selectedMonthlyDaySales = 0;
   let selectedDayRestock = 0;
@@ -251,126 +371,198 @@ export function renderDailyTransactions(ctx) {
   const todayAdj = appState.dailyAdjustments?.[dayKey];
   const todayExpense = Number(todayAdj?.expense) || 0;
   const netTodayIncome = selectedMonthlyDaySales - todayExpense;
-
   const isAllDays = selectedFilter === 'ALL';
-  const mRestockLabel = document.getElementById('monthly-restock-label');
-  const mRestock = document.getElementById('monthly-total-restock');
-  const mRestockNote = document.getElementById('monthly-restock-note');
-  const mAllRestockWrap = document.getElementById('monthly-all-days-restock-wrap');
-  const mAllRestock = document.getElementById('monthly-all-days-restock');
-  const mAllRestockNote = document.getElementById('monthly-all-days-restock-note');
 
-  if (isAllDays) {
-    if (mRestockLabel) mRestockLabel.textContent = 'Total Belanja Restock (Semua Hari)';
-    if (mRestock) mRestock.textContent = formatRupiah(monthlyRestock);
-    if (mRestockNote) {
-      mRestockNote.textContent =
-        monthlyRestockItems.size > 0
-          ? `${monthlyRestockItems.size} item · ${monthlyRestockQty} unit masuk (Semua hari)`
-          : 'Belum ada belanja restock';
-    }
-    if (mAllRestockWrap) mAllRestockWrap.classList.add('hidden');
-  } else {
-    if (mRestockLabel) {
-      mRestockLabel.textContent =
-        selectedMonthlyDay === session.dayNumber
-          ? `Belanja Restock Hari #${selectedMonthlyDay} (Aktif)`
-          : `Belanja Restock Hari #${selectedMonthlyDay}`;
-    }
-    if (mRestock) mRestock.textContent = formatRupiah(selectedDayRestock);
-    if (mRestockNote) {
-      mRestockNote.textContent =
-        selectedDayRestockItems.size > 0
-          ? `${selectedDayRestockItems.size} item · ${selectedDayRestockQty} unit masuk Hari #${selectedMonthlyDay}`
-          : `Belum ada restock pada Hari #${selectedMonthlyDay}`;
-    }
-    if (mAllRestockWrap) mAllRestockWrap.classList.remove('hidden');
-    if (mAllRestock) mAllRestock.textContent = formatRupiah(monthlyRestock);
-    if (mAllRestockNote) {
-      mAllRestockNote.textContent =
-        monthlyRestockItems.size > 0
-          ? `${monthlyRestockItems.size} item · ${monthlyRestockQty} unit (Grosir/Sales)`
-          : 'Belum ada belanja restock';
-    }
+  const dailySummarySection = document.getElementById('daily-summary-section');
+  const dailySectionHeading = document.getElementById('daily-section-heading');
+  const dailySectionDayTag = document.getElementById('daily-section-day-tag');
+  if (dailySummarySection) {
+    dailySummarySection.classList.remove('hidden');
   }
-  const monthlyGrid = document.getElementById('monthly-summary-grid');
-  const expenseCard = document.getElementById('monthly-expense-card');
-  if (monthlyGrid) {
-    monthlyGrid.className = isAllDays
-      ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-4'
-      : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4';
+  const selectedDateShort = dayDateLabelMap.get(selectedMonthlyDay) || '';
+  if (dailySectionHeading) {
+    dailySectionHeading.textContent = isAllDays
+      ? 'Rekap Gabungan Semua Tanggal'
+      : selectedDateShort
+        ? `Laporan Harian — ${selectedDateShort}`
+        : 'Laporan Harian';
   }
-  if (expenseCard) {
-    expenseCard.classList.toggle('hidden', isAllDays);
-    expenseCard.classList.toggle('flex', !isAllDays);
-  }
-
-  const mExpenseLabel = document.getElementById('monthly-expense-label');
-  const mExpense = document.getElementById('monthly-today-expense');
-  const mExpenseNote = document.getElementById('monthly-today-expense-note');
-  if (mExpenseLabel) {
-    mExpenseLabel.textContent =
-      selectedMonthlyDay === session.dayNumber
-        ? `Uang Keluar Hari #${selectedMonthlyDay} (Aktif)`
-        : `Uang Keluar Hari #${selectedMonthlyDay}`;
-  }
-  if (mExpense) {
-    if (todayExpense > 0) {
-      mExpense.textContent = `- ${formatRupiah(todayExpense)}`;
-      mExpense.className = 'text-xl sm:text-2xl font-extrabold font-mono tabular-nums text-rose-300 mt-1 block';
-    } else if (todayExpense < 0) {
-      mExpense.textContent = `+ ${formatRupiah(Math.abs(todayExpense))}`;
-      mExpense.className = 'text-xl sm:text-2xl font-extrabold font-mono tabular-nums text-emerald-300 mt-1 block';
-    } else {
-      mExpense.textContent = formatRupiah(0);
-      mExpense.className = 'text-xl sm:text-2xl font-extrabold font-mono tabular-nums text-amber-300 mt-1 block';
-    }
-  }
-  if (mExpenseNote) {
-    const expenseItems = Array.isArray(todayAdj?.items) ? todayAdj.items : [];
-    if (expenseItems.length > 0) {
-      const previewTitles = expenseItems
-        .slice(0, 2)
-        .map((it) => it.title)
-        .join(', ');
-      const extraCount = expenseItems.length > 2 ? ` +${expenseItems.length - 2} lainnya` : '';
-      mExpenseNote.textContent = `${expenseItems.length} pengeluaran: ${previewTitles}${extraCount}`;
-    } else if (todayAdj?.note) {
-      mExpenseNote.textContent = `Catatan: ${todayAdj.note}`;
-    } else if (todayExpense > 0) {
-      mExpenseNote.textContent = `Pengeluaran Hari #${selectedMonthlyDay}`;
-    } else if (todayExpense < 0) {
-      mExpenseNote.textContent = `Penambahan manual Hari #${selectedMonthlyDay}`;
-    } else {
-      mExpenseNote.textContent = 'Klik Tambah untuk mencatat pengeluaran';
-    }
+  if (dailySectionDayTag) {
+    dailySectionDayTag.textContent = isAllDays
+      ? `Total ${recordedDays.size} Hari`
+      : selectedMonthlyDay === session.dayNumber
+        ? `Hari #${selectedMonthlyDay} (Aktif)`
+        : `Hari #${selectedMonthlyDay}`;
   }
 
   const mTodayLabel = document.getElementById('monthly-today-income-label');
   const mTodayIncome = document.getElementById('monthly-today-income');
   const mTodayNote = document.getElementById('monthly-today-income-note');
+  const displayNetIncome = isAllDays ? allTimeNetIncome : netTodayIncome;
+  const displaySales = isAllDays ? allTimeSales : selectedMonthlyDaySales;
+  const displayExpense = isAllDays ? allTimeExpense : todayExpense;
+
   if (mTodayLabel) {
-    mTodayLabel.textContent =
-      selectedMonthlyDay === session.dayNumber
-        ? `Total Pemasukan Hari #${selectedMonthlyDay} (Aktif)`
-        : `Total Pemasukan Hari #${selectedMonthlyDay}`;
+    mTodayLabel.textContent = isAllDays
+      ? 'Pemasukan Bersih Semua Hari'
+      : selectedMonthlyDay === session.dayNumber
+        ? `Pemasukan Bersih Hari #${selectedMonthlyDay} (Aktif)`
+        : `Pemasukan Bersih Hari #${selectedMonthlyDay}`;
   }
   if (mTodayIncome) {
-    mTodayIncome.textContent = formatRupiah(netTodayIncome);
-    mTodayIncome.className = `text-xl sm:text-2xl font-extrabold font-mono tabular-nums mt-1 block ${
-      netTodayIncome >= 0 ? 'text-emerald-300' : 'text-rose-300'
+    mTodayIncome.textContent = formatRupiah(displayNetIncome);
+    mTodayIncome.className = `text-xl sm:text-2xl font-extrabold font-mono tabular-nums mt-1 block whitespace-nowrap ${
+      displayNetIncome >= 0 ? 'text-emerald-300' : 'text-rose-300'
     }`;
   }
   if (mTodayNote) {
-    if (todayExpense > 0) {
-      mTodayNote.textContent = `Omzet ${formatRupiah(selectedMonthlyDaySales)} - ${formatRupiah(todayExpense)}`;
-    } else if (todayExpense < 0) {
-      mTodayNote.textContent = `Omzet ${formatRupiah(selectedMonthlyDaySales)} + ${formatRupiah(
-        Math.abs(todayExpense)
+    if (displayExpense > 0) {
+      mTodayNote.textContent = `Omzet ${formatRupiah(displaySales)} - ${formatRupiah(displayExpense)}`;
+    } else if (displayExpense < 0) {
+      mTodayNote.textContent = `Omzet ${formatRupiah(displaySales)} + ${formatRupiah(
+        Math.abs(displayExpense)
       )}`;
     } else {
-      mTodayNote.textContent = `Sesuai omzet Hari #${selectedMonthlyDay}`;
+      mTodayNote.textContent = isAllDays
+        ? `Akumulasi ${recordedDays.size} hari operasional`
+        : `Sesuai omzet Hari #${selectedMonthlyDay}`;
     }
+  }
+
+  const mExpenseLabel = document.getElementById('monthly-expense-label');
+  const mExpense = document.getElementById('monthly-today-expense');
+  const mExpenseNote = document.getElementById('monthly-today-expense-note');
+  const expenseActionsEl = document.getElementById('daily-expense-actions');
+  if (expenseActionsEl) {
+    expenseActionsEl.classList.toggle('hidden', isAllDays);
+  }
+
+  if (mExpenseLabel) {
+    mExpenseLabel.textContent = isAllDays
+      ? 'Total Uang Keluar'
+      : selectedMonthlyDay === session.dayNumber
+        ? `Uang Keluar Hari #${selectedMonthlyDay} (Aktif)`
+        : `Uang Keluar Hari #${selectedMonthlyDay}`;
+  }
+  if (mExpense) {
+    if (displayExpense > 0) {
+      mExpense.textContent = `- ${formatRupiah(displayExpense)}`;
+      mExpense.className =
+        'text-xl sm:text-2xl font-extrabold font-mono tabular-nums text-rose-300 mt-1 block whitespace-nowrap';
+    } else if (displayExpense < 0) {
+      mExpense.textContent = `+ ${formatRupiah(Math.abs(displayExpense))}`;
+      mExpense.className =
+        'text-xl sm:text-2xl font-extrabold font-mono tabular-nums text-emerald-300 mt-1 block whitespace-nowrap';
+    } else {
+      mExpense.textContent = formatRupiah(0);
+      mExpense.className =
+        'text-xl sm:text-2xl font-extrabold font-mono tabular-nums text-amber-300 mt-1 block whitespace-nowrap';
+    }
+  }
+  if (mExpenseNote) {
+    if (isAllDays) {
+      mExpenseNote.textContent = 'Total pengeluaran harian gabungan';
+    } else {
+      const expenseItems = Array.isArray(todayAdj?.items) ? todayAdj.items : [];
+      if (expenseItems.length > 0) {
+        const previewTitles = expenseItems
+          .slice(0, 2)
+          .map((it) => it.title)
+          .join(', ');
+        const extraCount = expenseItems.length > 2 ? ` +${expenseItems.length - 2} lainnya` : '';
+        mExpenseNote.textContent = `${expenseItems.length} pengeluaran: ${previewTitles}${extraCount}`;
+      } else if (todayAdj?.note) {
+        mExpenseNote.textContent = `Catatan: ${todayAdj.note}`;
+      } else if (todayExpense > 0) {
+        mExpenseNote.textContent = `Pengeluaran Hari #${selectedMonthlyDay}`;
+      } else if (todayExpense < 0) {
+        mExpenseNote.textContent = `Penambahan manual Hari #${selectedMonthlyDay}`;
+      } else {
+        mExpenseNote.textContent = 'Klik Tambah untuk mencatat pengeluaran';
+      }
+    }
+  }
+
+  const mRestockLabel = document.getElementById('monthly-restock-label');
+  const mRestock = document.getElementById('monthly-total-restock');
+  const mRestockNote = document.getElementById('monthly-restock-note');
+  const displayRestock = isAllDays ? allTimeRestock : selectedDayRestock;
+  const displayRestockItemCount = isAllDays ? allTimeRestockItems.size : selectedDayRestockItems.size;
+  const displayRestockQty = isAllDays ? allTimeRestockQty : selectedDayRestockQty;
+
+  if (mRestockLabel) {
+    mRestockLabel.textContent = isAllDays
+      ? 'Total Belanja Restock'
+      : selectedMonthlyDay === session.dayNumber
+        ? `Belanja Restock Hari #${selectedMonthlyDay} (Aktif)`
+        : `Belanja Restock Hari #${selectedMonthlyDay}`;
+  }
+  if (mRestock) mRestock.textContent = formatRupiah(displayRestock);
+  if (mRestockNote) {
+    mRestockNote.textContent =
+      displayRestockItemCount > 0
+        ? `${displayRestockItemCount} item · ${displayRestockQty} unit masuk`
+        : isAllDays
+          ? 'Belum ada catatan belanja restock'
+          : `Belum ada restock pada Hari #${selectedMonthlyDay}`;
+  }
+
+  // Baris 2: Rekap Bulan Terpilih (Pemasukan, Keuntungan, Belanja Restock)
+  const monthlySectionHeading = document.getElementById('monthly-section-heading');
+  if (monthlySectionHeading) {
+    monthlySectionHeading.textContent = `Rekap Bulan ${targetMonthLabel}`;
+  }
+
+  const mSalesLabel = document.getElementById('monthly-total-sales-label');
+  const mSales = document.getElementById('monthly-total-sales');
+  const mSalesNote = document.getElementById('monthly-total-sales-note');
+  if (mSalesLabel) mSalesLabel.textContent = `Pemasukan Bulan ${targetMonthLabel}`;
+  if (mSales) {
+    mSales.textContent = formatRupiah(monthNetIncome);
+    mSales.className = `text-lg sm:text-xl font-extrabold font-mono tabular-nums mt-1 block whitespace-nowrap ${
+      monthNetIncome >= 0 ? 'text-white' : 'text-rose-300'
+    }`;
+  }
+  if (mSalesNote) {
+    if (monthExpense > 0) {
+      mSalesNote.textContent = `Omzet ${formatRupiah(monthSales)} - Keluar ${formatRupiah(monthExpense)}`;
+    } else if (monthExpense < 0) {
+      mSalesNote.textContent = `Omzet ${formatRupiah(monthSales)} + ${formatRupiah(Math.abs(monthExpense))}`;
+    } else {
+      mSalesNote.textContent = `Khusus bulan ${targetMonthLabel}`;
+    }
+  }
+
+  const mProfitLabel = document.getElementById('monthly-total-profit-label');
+  const mProfit = document.getElementById('monthly-total-profit');
+  const mProfitNote = document.getElementById('monthly-total-profit-note');
+  if (mProfitLabel) mProfitLabel.textContent = `Keuntungan Bulan ${targetMonthLabel}`;
+  if (mProfit) {
+    mProfit.textContent = formatRupiah(monthNetProfit);
+    mProfit.className = `text-lg sm:text-xl font-extrabold font-mono tabular-nums mt-1 block whitespace-nowrap ${
+      monthNetProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'
+    }`;
+  }
+  if (mProfitNote) {
+    if (monthExpense > 0) {
+      mProfitNote.textContent = `Laba jual ${formatRupiah(monthGrossProfit)} - Keluar ${formatRupiah(monthExpense)}`;
+    } else if (monthExpense < 0) {
+      mProfitNote.textContent = `Laba jual ${formatRupiah(monthGrossProfit)} + ${formatRupiah(Math.abs(monthExpense))}`;
+    } else {
+      mProfitNote.textContent = `Laba kotor penjualan ${targetMonthLabel}`;
+    }
+  }
+
+  const mPeriodRestockLabel = document.getElementById('monthly-period-restock-label');
+  const mAllRestock = document.getElementById('monthly-all-days-restock');
+  const mAllRestockNote = document.getElementById('monthly-all-days-restock-note');
+  if (mPeriodRestockLabel) mPeriodRestockLabel.textContent = `Belanja Restock ${targetMonthLabel}`;
+  if (mAllRestock) mAllRestock.textContent = formatRupiah(monthRestock);
+  if (mAllRestockNote) {
+    mAllRestockNote.textContent =
+      monthRestockItems.size > 0
+        ? `${monthRestockItems.size} item · ${monthRestockQty} unit masuk`
+        : `Belum ada restock di ${targetMonthLabel}`;
   }
 
   const dTrxCount = document.getElementById('daily-trx-count');
@@ -493,7 +685,10 @@ export function renderDailyTransactions(ctx) {
   if (filteredTransactions.length === 0) {
     listEl.innerHTML = `<p class="text-sm text-slate-500 text-center py-8">Belum ada transaksi tercatat pada filter hari yang dipilih.</p>`;
   } else {
-    listEl.innerHTML = filteredTransactions
+    const MAX_RENDERED_TRX = 150;
+    const visibleTransactions = filteredTransactions.slice(0, MAX_RENDERED_TRX);
+    const hiddenTrxCount = filteredTransactions.length - visibleTransactions.length;
+    const trxHTML = visibleTransactions
       .map((trx) => {
         const isSale = trx.type === 'SALE';
         const isAudit = trx.type === 'AUDIT';
@@ -522,10 +717,10 @@ export function renderDailyTransactions(ctx) {
           }">Laba: ${formatRupiah(trx.profit)}</div>`;
         } else if (isAudit) {
           iconWrapClass = 'bg-slate-100 text-slate-700';
-          iconName = 'clipboard-check';
-          typeLabel = 'AUDIT STOK';
+          iconName = 'edit-3';
+          typeLabel = 'ATUR STOK';
           typeTextClass = 'text-slate-700';
-          rightAmountHTML = `<div class="font-bold text-slate-700 text-xs">Penyesuaian Fisik</div><div class="text-[11px] text-slate-500">Non-kas</div>`;
+          rightAmountHTML = `<div class="font-bold text-slate-700 text-xs">Penyesuaian Stok</div><div class="text-[11px] text-slate-500">Non-kas</div>`;
         }
 
         const paymentBadge = isSale
@@ -559,6 +754,11 @@ export function renderDailyTransactions(ctx) {
         `;
       })
       .join('');
+    const moreTrxNotice =
+      hiddenTrxCount > 0
+        ? `<p class="py-3 text-center text-xs text-slate-500">Menampilkan ${visibleTransactions.length} transaksi terbaru dari ${filteredTransactions.length} transaksi. Pilih tanggal tertentu di kalender atau klik Unduh CSV untuk melihat semua.</p>`
+        : '';
+    listEl.innerHTML = trxHTML + moreTrxNotice;
   }
 
   const archiveEl = document.getElementById('daily-archive-list');
@@ -566,7 +766,10 @@ export function renderDailyTransactions(ctx) {
     if (!appState.dailyHistoryArchive || appState.dailyHistoryArchive.length === 0) {
       archiveEl.innerHTML = `<p class="text-sm text-slate-500 text-center py-6">Belum ada arsip laporan tutup toko. Gunakan tombol Rekap &amp; Tutup Toko di akhir hari untuk mengarsipkan.</p>`;
     } else {
-      archiveEl.innerHTML = appState.dailyHistoryArchive
+      const MAX_ARCHIVE_ROWS = 60;
+      const visibleArchives = appState.dailyHistoryArchive.slice(0, MAX_ARCHIVE_ROWS);
+      const hiddenArcCount = appState.dailyHistoryArchive.length - visibleArchives.length;
+      const archiveHTML = visibleArchives
         .map((arc) => {
           const netChange = arc.closingCash - arc.openingCash;
           const salesInfo =
@@ -574,11 +777,15 @@ export function renderDailyTransactions(ctx) {
               ? ` &middot; Omzet: ${formatRupiah(arc.totalSales)} &middot; Laba: ${formatRupiah(arc.totalProfit || 0)}`
               : '';
           const arcTz = escapeHTML(arc.timezone || getLocalTimezoneCode());
+          const arcDateHTML = arc.date
+            ? `<span class="font-bold text-slate-900">${escapeHTML(arc.date)}</span><span aria-hidden="true" class="text-slate-300">&middot;</span>`
+            : '';
           return `
             <div class="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm">
               <div>
                 <div class="flex flex-wrap items-center gap-2 text-xs">
-                  <span class="font-bold font-mono tabular-nums text-slate-900">Hari #${arc.dayNumber}</span>
+                  ${arcDateHTML}
+                  <span class="font-bold font-mono tabular-nums text-slate-700">Hari #${arc.dayNumber}</span>
                   <span aria-hidden="true" class="text-slate-300">&middot;</span>
                   <span class="text-slate-600 font-mono tabular-nums">Buka ${escapeHTML(arc.openedAt)} &ndash; Tutup ${escapeHTML(
                     arc.closedAt
@@ -602,6 +809,11 @@ export function renderDailyTransactions(ctx) {
           `;
         })
         .join('');
+      const moreArcNotice =
+        hiddenArcCount > 0
+          ? `<p class="py-3 text-center text-xs text-slate-500">Menampilkan ${visibleArchives.length} arsip hari terbaru dari total ${appState.dailyHistoryArchive.length} hari arsip. Pilih tanggal lama lewat tombol kalender di atas.</p>`
+          : '';
+      archiveEl.innerHTML = archiveHTML + moreArcNotice;
     }
   }
 }
@@ -747,6 +959,7 @@ export function openDailyClosingModal(ctx) {
         }
 
         upsertDayArchive(appState, currentDay, {
+          dateKey: appState.dailySession.dateKey || getLocalDateKey(closeNow),
           openedAt: appState.dailySession.openedAt,
           openedTimestamp: appState.dailySession.openedTimestamp || null,
           closedAt: nowStr,
@@ -778,8 +991,13 @@ function upsertDayArchive(appState, dayNumber, meta) {
     }
   });
 
+  const resolvedDateKey = meta.dateKey || appState.dailySession?.dateKey || getLocalDateKey();
+  const resolvedDateLabel = formatDateKeyToShort(resolvedDateKey);
+
   const entry = {
     dayNumber,
+    dateKey: resolvedDateKey,
+    ...(resolvedDateLabel ? { date: resolvedDateLabel } : {}),
     openedAt: meta.openedAt,
     openedTimestamp: meta.openedTimestamp || null,
     closedAt: meta.closedAt,
@@ -820,6 +1038,7 @@ export function archiveAndRolloverIfMidnight(appState) {
   const prevDay = session.dayNumber || 1;
   const nextDay = prevDay + 1;
   upsertDayArchive(appState, prevDay, {
+    dateKey: session.dateKey,
     openedAt: session.openedAt,
     openedTimestamp: session.openedTimestamp || null,
     closedAt: '23:59:59',
@@ -1343,6 +1562,408 @@ export function openEditTodayIncomeModal(ctx) {
       });
 
       document.getElementById('cancel-edit-income-btn')?.addEventListener('click', closeModal);
+    }
+  });
+}
+
+const FULL_MONTH_NAMES_ID = [
+  'Januari',
+  'Februari',
+  'Maret',
+  'April',
+  'Mei',
+  'Juni',
+  'Juli',
+  'Agustus',
+  'September',
+  'Oktober',
+  'November',
+  'Desember'
+];
+
+export function openCalendarDayPickerModal(ctx) {
+  const { appState } = ctx;
+  const session = appState.dailySession;
+  const { dayNumbers, dayToDateKey, dateKeyToDay, dayDateLabelMap } = buildDayDateIndex(appState);
+
+  const dayFilterEl = document.getElementById('laporan-day-filter');
+  const monthlySelectEl = document.getElementById('monthly-day-select');
+  const currentSelection =
+    (dayFilterEl instanceof HTMLSelectElement ? dayFilterEl.value : '') ||
+    (monthlySelectEl instanceof HTMLSelectElement ? monthlySelectEl.value : '') ||
+    'CURRENT';
+
+  const todayKey = session.dateKey || getLocalDateKey();
+  const currentMonthYearMatch = String(todayKey).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const todayYear = currentMonthYearMatch ? parseInt(currentMonthYearMatch[1], 10) : new Date().getFullYear();
+  const todayMonthIdx = currentMonthYearMatch ? parseInt(currentMonthYearMatch[2], 10) - 1 : new Date().getMonth();
+
+  const selectedDayNum =
+    currentSelection === 'ALL'
+      ? null
+      : currentSelection === 'CURRENT'
+        ? session.dayNumber
+        : Number(currentSelection) || session.dayNumber;
+  const selectedDateKey = selectedDayNum ? dayToDateKey.get(selectedDayNum) || todayKey : '';
+  const initialMatch = String(selectedDateKey || todayKey).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  let displayYear = initialMatch ? parseInt(initialMatch[1], 10) : todayYear;
+  let displayMonth = initialMatch ? parseInt(initialMatch[2], 10) - 1 : todayMonthIdx;
+  let viewMode = 'month'; // 'month' | 'year'
+
+  const applyFilterChoice = (value) => {
+    if (dayFilterEl instanceof HTMLSelectElement) dayFilterEl.value = value;
+    if (monthlySelectEl instanceof HTMLSelectElement) monthlySelectEl.value = value;
+    closeModal();
+    renderDailyTransactions(ctx);
+  };
+
+  const renderMonthViewHTML = () => {
+    const firstWeekday = new Date(displayYear, displayMonth, 1).getDay();
+    const daysInMonth = new Date(displayYear, displayMonth + 1, 0).getDate();
+    const weekdayHeaders = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
+      .map(
+        (w, i) =>
+          `<div class="text-center text-[11px] font-bold py-1 ${
+            i === 0 ? 'text-rose-600' : 'text-slate-500'
+          }">${w}</div>`
+      )
+      .join('');
+
+    const emptyCells = Array.from({ length: firstWeekday }, () => '<div aria-hidden="true"></div>').join('');
+    let recordedInMonth = 0;
+
+    const dayCells = Array.from({ length: daysInMonth }, (_, idx) => {
+      const day = idx + 1;
+      const dateKey = `${displayYear}-${String(displayMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const recordedDay = dateKeyToDay.get(dateKey);
+      const isToday = dateKey === todayKey;
+      const isSelected = currentSelection !== 'ALL' && dateKey === selectedDateKey;
+
+      if (recordedDay) {
+        recordedInMonth++;
+        const dateTitle = dayDateLabelMap.get(recordedDay) || dateKey;
+        const activeLabel = recordedDay === session.dayNumber ? ' (Aktif)' : '';
+        let cellClasses =
+          'min-h-[46px] sm:min-h-[50px] rounded-xl flex flex-col items-center justify-center gap-1 transition cursor-pointer tabular-nums ';
+        let dotHTML = '<span class="w-1.5 h-1.5 rounded-full bg-teal-600"></span>';
+
+        if (isSelected) {
+          cellClasses += 'bg-teal-700 text-white shadow-xs hover:bg-teal-800';
+          if (isToday) cellClasses += ' ring-2 ring-amber-400';
+          dotHTML = '<span class="w-1.5 h-1.5 rounded-full bg-teal-100"></span>';
+        } else if (isToday) {
+          cellClasses += 'bg-rose-50 text-rose-700 ring-2 ring-rose-500 hover:bg-rose-100';
+          dotHTML = '<span class="w-1.5 h-1.5 rounded-full bg-rose-600"></span>';
+        } else {
+          cellClasses += 'bg-slate-50 hover:bg-teal-50 text-slate-900 border border-slate-200 hover:border-teal-300';
+        }
+
+        return `
+          <button
+            type="button"
+            data-cal-day="${recordedDay}"
+            title="${escapeHTML(dateTitle)} · Hari #${recordedDay}${activeLabel}"
+            aria-label="Pilih ${escapeHTML(dateTitle)} (Hari #${recordedDay})"
+            class="${cellClasses}"
+          >
+            <span class="text-sm font-bold leading-none">${day}</span>
+            ${dotHTML}
+          </button>
+        `;
+      }
+
+      return `
+        <div class="min-h-[46px] sm:min-h-[50px] rounded-xl flex items-center justify-center text-sm text-slate-300 tabular-nums select-none">
+          ${day}
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5">
+            <button
+              type="button"
+              id="cal-prev-month-btn"
+              aria-label="Bulan sebelumnya"
+              class="min-w-[38px] min-h-[38px] inline-flex items-center justify-center rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+            >${renderIcon('chevron-left', 'w-4 h-4')}</button>
+            <button
+              type="button"
+              id="cal-zoom-year-btn"
+              title="Lihat ringkasan 12 bulan"
+              class="px-3 py-1.5 min-h-[38px] rounded-xl text-base sm:text-lg font-extrabold text-slate-900 hover:bg-slate-100 transition cursor-pointer whitespace-nowrap"
+            >${FULL_MONTH_NAMES_ID[displayMonth]} ${displayYear}</button>
+            <button
+              type="button"
+              id="cal-next-month-btn"
+              aria-label="Bulan berikutnya"
+              class="min-w-[38px] min-h-[38px] inline-flex items-center justify-center rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+            >${renderIcon('chevron-right', 'w-4 h-4')}</button>
+          </div>
+          <span class="text-xs font-medium text-slate-500 whitespace-nowrap">${recordedInMonth} hari ada data</span>
+        </div>
+
+        <div class="grid grid-cols-7 gap-1.5">
+          ${weekdayHeaders}
+          ${emptyCells}
+          ${dayCells}
+        </div>
+      </div>
+    `;
+  };
+
+  const renderYearViewHTML = () => {
+    const miniWeekdays = ['M', 'S', 'S', 'R', 'K', 'J', 'S']
+      .map((w, i) => `<span class="${i === 0 ? 'text-rose-500' : 'text-slate-400'} font-bold">${w}</span>`)
+      .join('');
+
+    const monthsHTML = CALENDAR_MONTH_NAMES.map((monthName, monthIdx) => {
+      const firstWeekday = new Date(displayYear, monthIdx, 1).getDay();
+      const daysInMonth = new Date(displayYear, monthIdx + 1, 0).getDate();
+      const isCurrentRealMonth = displayYear === todayYear && monthIdx === todayMonthIdx;
+      const monthKeyPrefix = `${displayYear}-${String(monthIdx + 1).padStart(2, '0')}-`;
+      let monthRecordedCount = 0;
+
+      const emptyCells = Array.from({ length: firstWeekday }, () => '<span aria-hidden="true"></span>').join('');
+      const dayCells = Array.from({ length: daysInMonth }, (_, idx) => {
+        const day = idx + 1;
+        const dateKey = `${monthKeyPrefix}${String(day).padStart(2, '0')}`;
+        const recordedDay = dateKeyToDay.get(dateKey);
+        const isToday = dateKey === todayKey;
+        const isSelected = currentSelection !== 'ALL' && dateKey === selectedDateKey;
+
+        if (recordedDay) {
+          monthRecordedCount++;
+          const dateTitle = dayDateLabelMap.get(recordedDay) || dateKey;
+          const activeLabel = recordedDay === session.dayNumber ? ' (Aktif)' : '';
+          let cellClass =
+            'w-6 h-6 mx-auto rounded-full flex flex-col items-center justify-center relative transition cursor-pointer ';
+          let dotHTML = '';
+
+          if (isSelected) {
+            cellClass += 'bg-teal-700 text-white font-bold shadow-xs';
+          } else if (isToday) {
+            cellClass += 'ring-1 ring-rose-500 text-rose-600 font-bold hover:bg-rose-50';
+          } else {
+            cellClass += 'text-slate-800 font-semibold hover:bg-teal-50 hover:text-teal-800';
+            dotHTML = '<span class="w-1 h-1 rounded-full bg-teal-600 absolute bottom-0.5"></span>';
+          }
+
+          return `<button type="button" data-cal-day="${recordedDay}" title="Hari #${recordedDay}${activeLabel} · ${escapeHTML(
+            dateTitle
+          )}" aria-label="Pilih Hari #${recordedDay} (${escapeHTML(dateTitle)})" class="${cellClass}"><span>${day}</span>${dotHTML}</button>`;
+        }
+
+        const plainClasses = isToday
+          ? 'w-6 h-6 mx-auto rounded-full flex items-center justify-center text-rose-600 ring-1 ring-rose-400 font-bold'
+          : 'w-6 h-6 mx-auto rounded-full flex items-center justify-center text-slate-300';
+        return `<span class="${plainClasses}">${day}</span>`;
+      }).join('');
+
+      return `
+        <div class="p-2.5 rounded-xl border border-slate-200 bg-slate-50/50">
+          <button
+            type="button"
+            data-cal-month="${monthIdx}"
+            class="w-full flex items-center justify-between gap-2 mb-1.5 text-left group cursor-pointer"
+          >
+            <span class="text-sm font-extrabold ${
+              isCurrentRealMonth ? 'text-rose-600' : 'text-slate-900 group-hover:text-teal-700'
+            }">${monthName}</span>
+            <span class="text-[10px] font-mono tabular-nums text-slate-500">${monthRecordedCount} hr</span>
+          </button>
+          <div class="grid grid-cols-7 gap-y-0.5 text-center text-[9px] mb-1">
+            ${miniWeekdays}
+          </div>
+          <div class="grid grid-cols-7 gap-y-0.5 text-center text-[11px] leading-none tabular-nums">
+            ${emptyCells}
+            ${dayCells}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5">
+            <button
+              type="button"
+              id="cal-prev-year-btn"
+              aria-label="Tahun sebelumnya"
+              class="min-w-[38px] min-h-[38px] inline-flex items-center justify-center rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+            >${renderIcon('chevron-left', 'w-4 h-4')}</button>
+            <span class="px-2 text-xl font-extrabold text-rose-600 tracking-tight tabular-nums">${displayYear}</span>
+            <button
+              type="button"
+              id="cal-next-year-btn"
+              aria-label="Tahun berikutnya"
+              class="min-w-[38px] min-h-[38px] inline-flex items-center justify-center rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+            >${renderIcon('chevron-right', 'w-4 h-4')}</button>
+          </div>
+          <span class="text-xs text-slate-500">Klik nama bulan atau tanggal yang bertanda titik</span>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          ${monthsHTML}
+        </div>
+      </div>
+    `;
+  };
+
+  const renderCalendarMarkup = () => {
+    const dateSummary = getSelectionDateLabel(currentSelection, session, dayDateLabelMap);
+    const daySummary = getSelectionDayNumberLabel(currentSelection, session);
+    const isAllActive = currentSelection === 'ALL';
+    const isTodayActive = currentSelection === 'CURRENT' || Number(currentSelection) === session.dayNumber;
+
+    return `
+      <div class="space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200">
+          <div>
+            <h3 class="text-base sm:text-lg font-bold text-slate-900">Pilih Tanggal Laporan</h3>
+            <p class="text-xs text-slate-500">${dayNumbers.size} hari operasional tercatat</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200">
+              <button
+                type="button"
+                id="cal-mode-month-btn"
+                class="px-3 py-1.5 min-h-[34px] rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                  viewMode === 'month' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }"
+              >Bulan</button>
+              <button
+                type="button"
+                id="cal-mode-year-btn"
+                class="px-3 py-1.5 min-h-[34px] rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                  viewMode === 'year' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }"
+              >1 Tahun</button>
+            </div>
+            <button
+              type="button"
+              id="cal-close-btn"
+              aria-label="Tutup kalender"
+              class="min-w-[38px] min-h-[38px] inline-flex items-center justify-center rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition cursor-pointer"
+            >${renderIcon('x', 'w-5 h-5')}</button>
+          </div>
+        </div>
+
+        ${viewMode === 'month' ? renderMonthViewHTML() : renderYearViewHTML()}
+
+        <div class="pt-3.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            id="cal-today-btn"
+            class="px-4 py-2 min-h-[40px] rounded-xl border text-xs sm:text-sm font-bold transition cursor-pointer whitespace-nowrap ${
+              isTodayActive
+                ? 'bg-teal-700 border-teal-700 text-white'
+                : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800'
+            }"
+          >Hari Ini</button>
+
+          <div class="text-xs text-center flex items-center justify-center gap-2">
+            <span class="font-bold text-slate-900">${escapeHTML(dateSummary)}</span>
+            <span aria-hidden="true" class="text-slate-300">&middot;</span>
+            <span class="font-mono tabular-nums font-semibold text-slate-600">${escapeHTML(daySummary)}</span>
+          </div>
+
+          <button
+            type="button"
+            id="cal-all-btn"
+            class="px-4 py-2 min-h-[40px] rounded-xl border text-xs sm:text-sm font-bold transition cursor-pointer whitespace-nowrap ${
+              isAllActive
+                ? 'bg-teal-700 border-teal-700 text-white'
+                : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800'
+            }"
+          >Semua Hari</button>
+        </div>
+      </div>
+    `;
+  };
+
+  openModal({
+    title: 'Kalender Laporan Toko',
+    hideHeader: true,
+    panelClass:
+      'bg-white text-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full p-5 sm:p-6 border border-slate-200 tab-panel max-h-[92vh] overflow-y-auto',
+    bodyHTML: renderCalendarMarkup(),
+    onMount: ({ bodyEl }) => {
+      const redraw = () => {
+        bodyEl.innerHTML = renderCalendarMarkup();
+        bindCalendarHandlers();
+      };
+
+      const bindCalendarHandlers = () => {
+        bodyEl.querySelector('#cal-mode-month-btn')?.addEventListener('click', () => {
+          viewMode = 'month';
+          redraw();
+        });
+        bodyEl.querySelector('#cal-mode-year-btn')?.addEventListener('click', () => {
+          viewMode = 'year';
+          redraw();
+        });
+        bodyEl.querySelector('#cal-zoom-year-btn')?.addEventListener('click', () => {
+          viewMode = 'year';
+          redraw();
+        });
+
+        bodyEl.querySelector('#cal-prev-month-btn')?.addEventListener('click', () => {
+          displayMonth -= 1;
+          if (displayMonth < 0) {
+            displayMonth = 11;
+            displayYear -= 1;
+          }
+          redraw();
+        });
+        bodyEl.querySelector('#cal-next-month-btn')?.addEventListener('click', () => {
+          displayMonth += 1;
+          if (displayMonth > 11) {
+            displayMonth = 0;
+            displayYear += 1;
+          }
+          redraw();
+        });
+
+        bodyEl.querySelector('#cal-prev-year-btn')?.addEventListener('click', () => {
+          displayYear -= 1;
+          redraw();
+        });
+        bodyEl.querySelector('#cal-next-year-btn')?.addEventListener('click', () => {
+          displayYear += 1;
+          redraw();
+        });
+
+        bodyEl.querySelector('#cal-close-btn')?.addEventListener('click', closeModal);
+        bodyEl.querySelector('#cal-today-btn')?.addEventListener('click', () => applyFilterChoice('CURRENT'));
+        bodyEl.querySelector('#cal-all-btn')?.addEventListener('click', () => applyFilterChoice('ALL'));
+
+        bodyEl.querySelectorAll('[data-cal-month]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const m = Number(btn.getAttribute('data-cal-month'));
+            if (Number.isFinite(m) && m >= 0 && m <= 11) {
+              displayMonth = m;
+              viewMode = 'month';
+              redraw();
+            }
+          });
+        });
+
+        bodyEl.querySelectorAll('[data-cal-day]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const rawDay = btn.getAttribute('data-cal-day');
+            if (!rawDay) return;
+            const dayNum = Number(rawDay);
+            applyFilterChoice(dayNum === session.dayNumber ? 'CURRENT' : String(dayNum));
+          });
+        });
+      };
+
+      bindCalendarHandlers();
     }
   });
 }

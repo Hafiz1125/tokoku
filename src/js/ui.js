@@ -43,8 +43,12 @@ export function showToast(message, type = 'info') {
   }, 3200);
 }
 
-export function openModal({ title, bodyHTML, footerHTML, onMount }) {
+const DEFAULT_MODAL_PANEL_CLASS =
+  'bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 border border-slate-200 tab-panel';
+
+export function openModal({ title, bodyHTML, footerHTML = '', onMount, panelClass = '', hideHeader = false }) {
   const modal = document.getElementById('custom-modal');
+  const panelEl = document.getElementById('modal-dialog-panel');
   const titleEl = document.getElementById('modal-title');
   const bodyEl = document.getElementById('modal-body');
   const footerEl = document.getElementById('modal-footer');
@@ -55,9 +59,19 @@ export function openModal({ title, bodyHTML, footerHTML, onMount }) {
     activeModalCleanup = null;
   }
 
-  titleEl.textContent = title;
+  if (panelEl) {
+    panelEl.className = panelClass || DEFAULT_MODAL_PANEL_CLASS;
+  }
+
+  const headerRow = titleEl.parentElement;
+  if (headerRow) {
+    headerRow.classList.toggle('hidden', Boolean(hideHeader));
+  }
+
+  titleEl.textContent = title || '';
   bodyEl.innerHTML = bodyHTML;
   footerEl.innerHTML = footerHTML;
+  footerEl.classList.toggle('hidden', !footerHTML);
 
   modal.classList.remove('hidden');
   modal.classList.add('flex');
@@ -77,10 +91,22 @@ export function openModal({ title, bodyHTML, footerHTML, onMount }) {
 
 export function closeModal() {
   const modal = document.getElementById('custom-modal');
+  const panelEl = document.getElementById('modal-dialog-panel');
+  const titleEl = document.getElementById('modal-title');
+  const footerEl = document.getElementById('modal-footer');
   if (!modal) return;
   if (typeof activeModalCleanup === 'function') {
     activeModalCleanup();
     activeModalCleanup = null;
+  }
+  if (panelEl) {
+    panelEl.className = DEFAULT_MODAL_PANEL_CLASS;
+  }
+  if (titleEl?.parentElement) {
+    titleEl.parentElement.classList.remove('hidden');
+  }
+  if (footerEl) {
+    footerEl.classList.remove('hidden');
   }
   modal.classList.add('hidden');
   modal.classList.remove('flex');
@@ -209,10 +235,11 @@ export function updateRealtimeClockAndShiftUI(appState) {
   const openedInfo = document.getElementById('shift-opened-info');
   if (openedInfo) {
     if (session.isOpen) {
-      const reopenedPart = session.reopenedAt ? ` (Buka kembali ${session.reopenedAt})` : '';
-      openedInfo.textContent = `Dibuka pukul ${session.openedAt} ${tz}${reopenedPart} · Sekarang ${nowClock} ${tz} · Kas Awal: ${formatRupiah(session.openingCash)}`;
+      openedInfo.textContent = `Buka pukul ${session.openedAt} ${tz} · Kas Awal: ${formatRupiah(
+        session.openingCash
+      )}`;
     } else {
-      openedInfo.textContent = `Dibuka ${session.openedAt} · Ditutup ${session.closedAt || '-'} ${tz} · Sekarang ${nowClock} ${tz}`;
+      openedInfo.textContent = `Buka ${session.openedAt} · Tutup ${session.closedAt || '-'} ${tz}`;
     }
   }
 

@@ -62,13 +62,13 @@ export const BADGE_DEFINITIONS = [
   {
     id: 'stock_master',
     title: 'Penjaga Rantai Pasok',
-    desc: 'Melakukan restock barang tepat waktu saat menyentuh titik ROP',
+    desc: 'Melakukan restock barang tepat waktu saat stok menipis',
     icon: 'truck'
   },
   {
     id: 'diligent_auditor',
-    title: 'Auditor Teliti',
-    desc: 'Menyelesaikan audit fisik sisa stok (Stock Opname)',
+    title: 'Pengelola Stok Teliti',
+    desc: 'Menyesuaikan dan merapikan data sisa stok barang',
     icon: 'clipboard-check'
   }
 ];

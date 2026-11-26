@@ -13,11 +13,9 @@ export function formatRupiah(num) {
   return prefix + Math.abs(Math.round(safeNum)).toLocaleString('id-ID');
 }
 
-export function calculateROP(product) {
-  const daily = Math.max(0, Number(product.dailySalesAvg) || 0);
-  const lead = Math.max(0, Number(product.leadTimeDays) || 0);
-  const safety = Math.max(0, Number(product.safetyStock) || 0);
-  return daily * lead + safety;
+export function getMinStockThreshold(product) {
+  const minVal = Number(product?.safetyStock);
+  return Number.isFinite(minVal) && minVal >= 0 ? Math.max(1, minVal) : 5;
 }
 
 export function calculateMargin(costPrice, sellPrice) {

@@ -106,10 +106,15 @@ export async function registerUser({ username, password, ownerName, storeName })
 
 export async function saveStoreToServer(storeState, { keepalive = false } = {}) {
   if (!authToken) return null;
+  const body = JSON.stringify({
+    storeState,
+    syncSource: keepalive ? 'pagehide' : 'action'
+  });
+  const useKeepalive = Boolean(keepalive && body.length < 60000);
   const data = await apiRequest('/api/store', {
     method: 'PUT',
-    keepalive,
-    body: JSON.stringify({ storeState })
+    keepalive: useKeepalive,
+    body
   });
   if (data.user) {
     currentUser = data.user;
