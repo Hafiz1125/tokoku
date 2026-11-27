@@ -138,6 +138,8 @@ export function initAuthScreen({ onAuthenticated }) {
   const errorBox = document.getElementById('auth-error-box');
   const firstRunNote = document.getElementById('auth-firstrun-note');
   const submitBtn = document.getElementById('auth-submit-btn');
+  const formTitle = document.getElementById('auth-form-title');
+  const formSubtitle = document.getElementById('auth-form-subtitle');
 
   function setError(message) {
     if (!errorBox) return;
@@ -160,19 +162,29 @@ export function initAuthScreen({ onAuthenticated }) {
     }
     if (ownerInput instanceof HTMLInputElement) ownerInput.required = isReg;
     if (storeInput instanceof HTMLInputElement) storeInput.required = isReg;
+    if (passwordInput instanceof HTMLInputElement) {
+      passwordInput.autocomplete = isReg ? 'new-password' : 'current-password';
+    }
+
+    if (formTitle) {
+      formTitle.textContent = isReg ? 'Buat Akun Toko Baru' : 'Masuk ke Akun Toko';
+    }
+    if (formSubtitle) {
+      formSubtitle.textContent = isReg
+        ? 'Isi nama usaha dan akun Anda untuk mulai mengelola stok dan kasir.'
+        : 'Masukkan username dan kata sandi untuk membuka pembukuan toko Anda.';
+    }
+
+    const activeTabClass =
+      'py-2.5 px-3 min-h-[40px] rounded-lg text-xs sm:text-sm font-bold bg-white text-slate-900 shadow-xs transition cursor-pointer';
+    const inactiveTabClass =
+      'py-2.5 px-3 min-h-[40px] rounded-lg text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition cursor-pointer';
 
     if (loginTabBtn && registerTabBtn) {
-      if (isReg) {
-        registerTabBtn.className =
-          'flex-1 py-2 px-3 min-h-[40px] rounded-lg text-xs sm:text-sm font-bold bg-white text-slate-900 shadow-xs transition cursor-pointer';
-        loginTabBtn.className =
-          'flex-1 py-2 px-3 min-h-[40px] rounded-lg text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition cursor-pointer';
-      } else {
-        loginTabBtn.className =
-          'flex-1 py-2 px-3 min-h-[40px] rounded-lg text-xs sm:text-sm font-bold bg-white text-slate-900 shadow-xs transition cursor-pointer';
-        registerTabBtn.className =
-          'flex-1 py-2 px-3 min-h-[40px] rounded-lg text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition cursor-pointer';
-      }
+      loginTabBtn.className = isReg ? inactiveTabClass : activeTabClass;
+      registerTabBtn.className = isReg ? activeTabClass : inactiveTabClass;
+      loginTabBtn.setAttribute('aria-selected', String(!isReg));
+      registerTabBtn.setAttribute('aria-selected', String(isReg));
     }
 
     if (submitBtn) {

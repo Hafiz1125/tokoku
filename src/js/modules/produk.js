@@ -3,6 +3,44 @@ import { renderIcon } from '../icons.js';
 import { closeModal, openModal, showToast } from '../ui.js';
 import { calculateMargin, compressImageFile, escapeHTML, formatRupiah } from '../utils.js';
 
+export function getAllProductCategories(appState) {
+  const seen = new Set();
+  const list = [];
+  const addUnique = (raw) => {
+    if (typeof raw !== 'string') return;
+    const trimmed = raw.trim().slice(0, 40);
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      list.push(trimmed);
+    }
+  };
+
+  PRODUCT_CATEGORIES.forEach(addUnique);
+  if (Array.isArray(appState?.customCategories)) {
+    appState.customCategories.forEach(addUnique);
+  }
+  if (Array.isArray(appState?.products)) {
+    appState.products.forEach((p) => addUnique(p?.category));
+  }
+  return list;
+}
+
+function registerCustomCategory(appState, rawName) {
+  const trimmed = String(rawName || '').trim().slice(0, 40);
+  if (!trimmed) return null;
+  if (!Array.isArray(appState.customCategories)) {
+    appState.customCategories = [];
+  }
+  const existing = getAllProductCategories(appState).find(
+    (cat) => cat.toLowerCase() === trimmed.toLowerCase()
+  );
+  if (existing) return existing;
+  appState.customCategories.push(trimmed);
+  return trimmed;
+}
+
 export function renderProductsGrid(ctx) {
   const { appState } = ctx;
   const grid = document.getElementById('products-cards-grid');
@@ -10,6 +48,19 @@ export function renderProductsGrid(ctx) {
 
   const searchInput = document.getElementById('search-product-input');
   const categorySelect = document.getElementById('filter-category-select');
+  const countLabel = document.getElementById('produk-count-label');
+
+  if (categorySelect instanceof HTMLSelectElement) {
+    const prevCategory = categorySelect.value || 'ALL';
+    const categories = getAllProductCategories(appState);
+    categorySelect.innerHTML = [
+      '<option value="ALL">Semua Kategori</option>',
+      ...categories.map((c) => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`)
+    ].join('');
+    categorySelect.value =
+      prevCategory === 'ALL' || categories.includes(prevCategory) ? prevCategory : 'ALL';
+  }
+
   const query = (searchInput instanceof HTMLInputElement ? searchInput.value : '').toLowerCase().trim();
   const category = categorySelect instanceof HTMLSelectElement ? categorySelect.value : 'ALL';
 
@@ -18,6 +69,13 @@ export function renderProductsGrid(ctx) {
     const matchCat = category === 'ALL' || p.category === category;
     return matchName && matchCat;
   });
+
+  if (countLabel) {
+    countLabel.textContent =
+      filtered.length === appState.products.length
+        ? `${filtered.length} produk`
+        : `${filtered.length} dari ${appState.products.length} produk`;
+  }
 
   if (filtered.length === 0) {
     grid.innerHTML = `
@@ -49,62 +107,58 @@ export function renderProductsGrid(ctx) {
       }
 
       return `
-        <article class="bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:border-teal-400 transition">
-          <div>
-            <div class="h-40 bg-slate-100 overflow-hidden border-b border-slate-200">
-              <img
-                src="${escapeHTML(imgSrc)}"
-                alt="${escapeHTML(p.name)}"
-                referrerpolicy="no-referrer"
-                data-fallback="${escapeHTML(fallbackImg)}"
-                class="product-card-img w-full h-full object-cover"
-              />
-            </div>
-
-            <div class="p-4 space-y-3">
-              <div>
-                <div class="flex items-center justify-between gap-2 text-xs text-slate-500">
-                  <span>${escapeHTML(p.category)}</span>
-                  <span class="font-mono tabular-nums font-bold ${marginTextClass}">
-                    Keuntungan ${margin.toFixed(1)}% &middot; ${marginStatusLabel}
-                  </span>
-                </div>
-                <h4 class="font-bold text-slate-900 text-base mt-1 truncate" title="${escapeHTML(p.name)}">
-                  ${escapeHTML(p.name)}
-                </h4>
-              </div>
-
-              <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100 text-xs">
-                <div>
-                  <span class="text-slate-500 block">Harga Modal</span>
-                  <strong class="font-mono tabular-nums text-slate-800 font-semibold">${formatRupiah(p.costPrice)}</strong>
-                </div>
-                <div class="text-right">
-                  <span class="text-slate-500 block">Harga Jual</span>
-                  <strong class="font-mono tabular-nums text-teal-700 font-extrabold text-sm">${formatRupiah(p.sellPrice)}</strong>
-                </div>
-              </div>
-
-              <div class="flex items-center justify-between text-xs text-slate-500 pt-1">
-                <span>
-                  Laba/unit:
-                  <strong class="font-mono tabular-nums ${profitUnit >= 0 ? 'text-emerald-700' : 'text-rose-700'}">
-                    ${formatRupiah(profitUnit)}
-                  </strong>
-                </span>
-                <span>
-                  Stok: <strong class="font-mono tabular-nums text-slate-900">${p.stock} unit</strong>
+        <article class="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col justify-between gap-3.5 hover:border-teal-400 transition">
+          <div class="flex items-start gap-3">
+            <img
+              src="${escapeHTML(imgSrc)}"
+              alt="${escapeHTML(p.name)}"
+              referrerpolicy="no-referrer"
+              data-fallback="${escapeHTML(fallbackImg)}"
+              class="product-card-img w-14 h-14 rounded-xl object-cover border border-slate-200 bg-slate-50 shrink-0"
+            />
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                <span class="truncate">${escapeHTML(p.category)}</span>
+                <span class="font-mono tabular-nums font-bold ${marginTextClass} whitespace-nowrap shrink-0">
+                  ${margin.toFixed(1)}% &middot; ${marginStatusLabel}
                 </span>
               </div>
+              <h4 class="font-bold text-slate-900 text-base mt-0.5 truncate" title="${escapeHTML(p.name)}">
+                ${escapeHTML(p.name)}
+              </h4>
+              <p class="text-xs text-slate-500 font-mono tabular-nums mt-0.5">
+                Stok: <strong class="${p.stock <= 0 ? 'text-rose-700' : 'text-slate-800'}">${p.stock} unit</strong>
+              </p>
             </div>
           </div>
 
-          <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+          <div class="grid grid-cols-3 divide-x divide-slate-200 bg-slate-50 rounded-xl py-2.5 px-2 text-xs">
+            <div class="px-2 min-w-0">
+              <span class="text-[11px] text-slate-500 block">Modal</span>
+              <strong class="font-mono tabular-nums text-slate-800 font-semibold block truncate mt-0.5">${formatRupiah(
+                p.costPrice
+              )}</strong>
+            </div>
+            <div class="px-2 min-w-0">
+              <span class="text-[11px] text-slate-500 block">Harga Jual</span>
+              <strong class="font-mono tabular-nums text-teal-700 font-extrabold block truncate mt-0.5">${formatRupiah(
+                p.sellPrice
+              )}</strong>
+            </div>
+            <div class="px-2 min-w-0">
+              <span class="text-[11px] text-slate-500 block">Untung/unit</span>
+              <strong class="font-mono tabular-nums font-bold block truncate mt-0.5 ${
+                profitUnit >= 0 ? 'text-emerald-700' : 'text-rose-700'
+              }">${profitUnit >= 0 ? '+' : ''}${formatRupiah(profitUnit)}</strong>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 pt-0.5">
             <button
               type="button"
               data-action="edit-product"
               data-id="${escapeHTML(p.id)}"
-              class="flex-1 min-h-[40px] inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 hover:border-teal-600 hover:text-teal-700 transition cursor-pointer"
+              class="flex-1 min-h-[38px] inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-slate-50 hover:bg-teal-700 hover:text-white text-slate-700 border border-slate-200 hover:border-teal-700 transition cursor-pointer"
             >
               ${renderIcon('edit-3', 'w-3.5 h-3.5')}
               <span>Edit Produk</span>
@@ -114,7 +168,8 @@ export function renderProductsGrid(ctx) {
               data-action="delete-product"
               data-id="${escapeHTML(p.id)}"
               aria-label="Hapus ${escapeHTML(p.name)}"
-              class="min-w-[40px] min-h-[40px] inline-flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 transition cursor-pointer"
+              title="Hapus Produk"
+              class="min-w-[38px] min-h-[38px] inline-flex items-center justify-center rounded-xl bg-slate-50 border border-slate-200 text-slate-500 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 transition cursor-pointer shrink-0"
             >
               ${renderIcon('trash-2', 'w-4 h-4')}
             </button>
@@ -171,7 +226,7 @@ export function openProductFormModal(ctx, productId = null) {
                 <span>Unggah Foto</span>
                 <input type="file" id="prod-image-file" accept="image/*" class="hidden" />
               </label>
-              <span class="text-[11px] text-slate-500">atau pilih ikon preset</span>
+              <span class="text-[11px] text-slate-500">atau pilih foto preset</span>
             </div>
           </div>
         </div>
@@ -216,14 +271,27 @@ export function openProductFormModal(ctx, productId = null) {
 
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label for="prod-category" class="block text-xs font-bold text-slate-700 mb-1">Kategori</label>
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <label for="prod-category" class="block text-xs font-bold text-slate-700">Kategori</label>
+            <button
+              type="button"
+              id="prod-toggle-new-cat-btn"
+              class="text-[11px] font-bold text-teal-700 hover:text-teal-800 hover:underline cursor-pointer whitespace-nowrap"
+            >
+              + Baru
+            </button>
+          </div>
           <select
             id="prod-category"
             class="w-full px-3.5 py-2 min-h-[42px] border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-600 focus:outline-none"
           >
-            ${PRODUCT_CATEGORIES.map(
-              (c) => `<option value="${c}" ${prod.category === c ? 'selected' : ''}>${c}</option>`
-            ).join('')}
+            ${getAllProductCategories(appState)
+              .map(
+                (c) =>
+                  `<option value="${escapeHTML(c)}" ${prod.category === c ? 'selected' : ''}>${escapeHTML(c)}</option>`
+              )
+              .join('')}
+            <option value="__NEW__">+ Tambah Kategori Baru...</option>
           </select>
         </div>
         <div>
@@ -236,6 +304,35 @@ export function openProductFormModal(ctx, productId = null) {
             required
             class="w-full px-3.5 py-2 min-h-[42px] border border-slate-300 rounded-xl text-sm font-mono tabular-nums focus:ring-2 focus:ring-teal-600 focus:outline-none"
           />
+        </div>
+      </div>
+
+      <div id="prod-new-category-wrap" class="hidden p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+        <label for="prod-new-category" class="block text-xs font-bold text-slate-700">
+          Nama Kategori Baru
+        </label>
+        <div class="flex items-center gap-2">
+          <input
+            type="text"
+            id="prod-new-category"
+            maxlength="40"
+            placeholder="Contoh: Alat Tulis, Rokok, Frozen Food..."
+            class="flex-1 px-3 py-2 min-h-[38px] bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-600 focus:outline-none"
+          />
+          <button
+            type="button"
+            id="prod-add-category-btn"
+            class="px-3.5 py-2 min-h-[38px] rounded-xl text-xs font-bold bg-teal-700 hover:bg-teal-800 text-white transition cursor-pointer shrink-0 whitespace-nowrap"
+          >
+            Tambah
+          </button>
+          <button
+            type="button"
+            id="prod-cancel-category-btn"
+            class="px-3 py-2 min-h-[38px] rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200 transition cursor-pointer shrink-0"
+          >
+            Batal
+          </button>
         </div>
       </div>
 
@@ -370,10 +467,98 @@ export function openProductFormModal(ctx, productId = null) {
         }
       });
 
+      const categorySelectEl = document.getElementById('prod-category');
+      const toggleNewCatBtn = document.getElementById('prod-toggle-new-cat-btn');
+      const newCatWrap = document.getElementById('prod-new-category-wrap');
+      const newCatInput = document.getElementById('prod-new-category');
+      const addNewCatBtn = document.getElementById('prod-add-category-btn');
+      const cancelNewCatBtn = document.getElementById('prod-cancel-category-btn');
+      let lastSelectedCategory =
+        categorySelectEl instanceof HTMLSelectElement && categorySelectEl.value !== '__NEW__'
+          ? categorySelectEl.value
+          : prod.category || 'Sembako';
+
+      const showNewCategoryInput = (show) => {
+        if (!newCatWrap) return;
+        newCatWrap.classList.toggle('hidden', !show);
+        if (show && newCatInput instanceof HTMLInputElement) {
+          newCatInput.focus();
+        } else if (!show && newCatInput instanceof HTMLInputElement) {
+          newCatInput.value = '';
+          if (categorySelectEl instanceof HTMLSelectElement && categorySelectEl.value === '__NEW__') {
+            categorySelectEl.value = lastSelectedCategory;
+          }
+        }
+      };
+
+      const renderCategorySelectOptions = (selectedVal) => {
+        if (!(categorySelectEl instanceof HTMLSelectElement)) return;
+        const cats = getAllProductCategories(appState);
+        categorySelectEl.innerHTML = [
+          ...cats.map((c) => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`),
+          '<option value="__NEW__">+ Tambah Kategori Baru...</option>'
+        ].join('');
+        categorySelectEl.value = cats.includes(selectedVal) ? selectedVal : cats[0] || 'Sembako';
+        lastSelectedCategory = categorySelectEl.value;
+      };
+
+      const commitNewCategoryFromInput = () => {
+        if (!(newCatInput instanceof HTMLInputElement)) return null;
+        const added = registerCustomCategory(appState, newCatInput.value);
+        if (!added) {
+          showToast('Masukkan nama kategori baru terlebih dahulu.', 'error');
+          newCatInput.focus();
+          return null;
+        }
+        renderCategorySelectOptions(added);
+        showNewCategoryInput(false);
+        showToast(`Kategori "${added}" ditambahkan.`, 'success');
+        return added;
+      };
+
+      categorySelectEl?.addEventListener('change', () => {
+        if (!(categorySelectEl instanceof HTMLSelectElement)) return;
+        if (categorySelectEl.value === '__NEW__') {
+          showNewCategoryInput(true);
+        } else {
+          lastSelectedCategory = categorySelectEl.value;
+          showNewCategoryInput(false);
+        }
+      });
+
+      toggleNewCatBtn?.addEventListener('click', () => {
+        const currentlyHidden = newCatWrap?.classList.contains('hidden');
+        showNewCategoryInput(Boolean(currentlyHidden));
+      });
+
+      addNewCatBtn?.addEventListener('click', commitNewCategoryFromInput);
+      cancelNewCatBtn?.addEventListener('click', () => showNewCategoryInput(false));
+      newCatInput?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          commitNewCategoryFromInput();
+        }
+      });
+
       document.getElementById('cancel-prod-modal-btn')?.addEventListener('click', closeModal);
       document.getElementById('save-prod-modal-btn')?.addEventListener('click', () => {
         const name = (document.getElementById('prod-name')?.value || '').trim();
-        const category = document.getElementById('prod-category')?.value || 'Sembako';
+        let category = categorySelectEl instanceof HTMLSelectElement ? categorySelectEl.value : 'Sembako';
+
+        if (
+          newCatWrap &&
+          !newCatWrap.classList.contains('hidden') &&
+          newCatInput instanceof HTMLInputElement &&
+          newCatInput.value.trim()
+        ) {
+          const added = registerCustomCategory(appState, newCatInput.value);
+          if (added) category = added;
+        } else if (category === '__NEW__') {
+          showToast('Masukkan nama kategori baru atau pilih kategori yang tersedia.', 'error');
+          if (newCatInput instanceof HTMLInputElement) newCatInput.focus();
+          return;
+        }
+
         const rawImg = (document.getElementById('prod-image-url')?.value || '').trim();
         const imageUrl = rawImg || getCategoryFallbackImage(category);
         const stock = Math.max(0, parseInt(document.getElementById('prod-stock')?.value || '0', 10) || 0);

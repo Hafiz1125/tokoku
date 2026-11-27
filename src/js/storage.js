@@ -132,6 +132,21 @@ export function normalizeState(candidate) {
     });
   }
 
+  const customCategories = [];
+  const seenCats = new Set();
+  if (Array.isArray(candidate.customCategories)) {
+    candidate.customCategories.forEach((cat) => {
+      if (typeof cat !== 'string') return;
+      const trimmed = cat.trim().slice(0, 40);
+      if (!trimmed) return;
+      const key = trimmed.toLowerCase();
+      if (!seenCats.has(key)) {
+        seenCats.add(key);
+        customCategories.push(trimmed);
+      }
+    });
+  }
+
   return {
     storeProfile,
     dailySession,
@@ -139,7 +154,8 @@ export function normalizeState(candidate) {
     products,
     transactions,
     dailyHistoryArchive,
-    dailyAdjustments
+    dailyAdjustments,
+    customCategories
   };
 }
 

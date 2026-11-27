@@ -1,11 +1,16 @@
 import { getCategoryFallbackImage } from '../constants.js';
 import { showToast, updateRealtimeClockAndShiftUI } from '../ui.js';
 import { escapeHTML, formatRupiah } from '../utils.js';
+import { getAllProductCategories } from './produk.js';
 
 export function renderPOSProducts(ctx) {
-  const { appState } = ctx;
+  const { appState, posCart } = ctx;
   const grid = document.getElementById('pos-products-grid');
   const shiftHint = document.getElementById('pos-shift-hint');
+  const searchEl = document.getElementById('pos-search-input');
+  const categorySelect = document.getElementById('pos-category-filter');
+  const countEl = document.getElementById('pos-catalog-count');
+
   if (shiftHint) {
     shiftHint.className = appState.dailySession.isOpen
       ? 'text-xs font-semibold text-emerald-700'
@@ -13,6 +18,33 @@ export function renderPOSProducts(ctx) {
     updateRealtimeClockAndShiftUI(appState);
   }
   if (!grid) return;
+
+  if (categorySelect instanceof HTMLSelectElement) {
+    const prevCategory = categorySelect.value || 'ALL';
+    const categories = getAllProductCategories(appState);
+    categorySelect.innerHTML = [
+      '<option value="ALL">Semua Kategori</option>',
+      ...categories.map((c) => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`)
+    ].join('');
+    categorySelect.value =
+      prevCategory === 'ALL' || categories.includes(prevCategory) ? prevCategory : 'ALL';
+  }
+
+  const query = searchEl instanceof HTMLInputElement ? searchEl.value.trim().toLowerCase() : '';
+  const selectedCategory = categorySelect instanceof HTMLSelectElement ? categorySelect.value : 'ALL';
+  const filtered = appState.products.filter((p) => {
+    const matchQuery =
+      !query || p.name.toLowerCase().includes(query) || (p.category || '').toLowerCase().includes(query);
+    const matchCategory = selectedCategory === 'ALL' || p.category === selectedCategory;
+    return matchQuery && matchCategory;
+  });
+
+  if (countEl) {
+    countEl.textContent =
+      filtered.length === appState.products.length
+        ? `${filtered.length} barang`
+        : `${filtered.length} dari ${appState.products.length} barang`;
+  }
 
   if (appState.products.length === 0) {
     grid.innerHTML = `
@@ -23,13 +55,25 @@ export function renderPOSProducts(ctx) {
     return;
   }
 
-  grid.innerHTML = appState.products
+  if (filtered.length === 0) {
+    grid.innerHTML = `
+      <div class="col-span-full bg-white rounded-2xl border border-slate-200 py-10 px-6 text-center text-sm text-slate-600">
+        Tidak ada barang yang cocok dengan pencarian atau kategori yang dipilih.
+      </div>
+    `;
+    return;
+  }
+
+  grid.innerHTML = filtered
     .map((p) => {
       const outOfStock = p.stock <= 0;
+      const inCartQty = posCart[p.id] || 0;
       const fallbackImg = getCategoryFallbackImage(p.category);
       const imgSrc = p.imageUrl || fallbackImg;
       return `
-        <div class="bg-white p-3.5 rounded-2xl border border-slate-200 flex items-center justify-between gap-3">
+        <div class="bg-white p-3.5 rounded-2xl border ${
+          inCartQty > 0 ? 'border-teal-500' : 'border-slate-200'
+        } flex items-center justify-between gap-3 transition">
           <div class="flex items-center gap-3 min-w-0">
             <img
               src="${escapeHTML(imgSrc)}"
@@ -39,12 +83,16 @@ export function renderPOSProducts(ctx) {
               class="pos-item-img w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0 bg-slate-50"
             />
             <div class="min-w-0">
-              <div class="font-bold text-slate-900 text-sm truncate">${escapeHTML(p.name)}</div>
+              <div class="font-bold text-slate-900 text-sm truncate" title="${escapeHTML(p.name)}">${escapeHTML(
+        p.name
+      )}</div>
               <div class="text-xs font-mono tabular-nums text-teal-700 font-extrabold mt-0.5">
                 ${formatRupiah(p.sellPrice)}
               </div>
-              <div class="text-[11px] font-mono tabular-nums text-slate-500 mt-0.5">
-                Sisa stok: ${p.stock} unit
+              <div class="text-[11px] font-mono tabular-nums mt-0.5 ${
+                outOfStock ? 'text-rose-700 font-semibold' : 'text-slate-500'
+              }">
+                Stok: ${p.stock} unit${inCartQty > 0 ? ` &middot; <strong class="text-teal-700">${inCartQty} dipilih</strong>` : ''}
               </div>
             </div>
           </div>
@@ -53,13 +101,15 @@ export function renderPOSProducts(ctx) {
             data-action="add-to-cart"
             data-id="${escapeHTML(p.id)}"
             ${outOfStock ? 'disabled' : ''}
-            class="px-3 py-2 min-h-[40px] rounded-xl text-xs font-bold transition shrink-0 whitespace-nowrap ${
+            class="px-3 py-2 min-h-[38px] rounded-xl text-xs font-bold transition shrink-0 whitespace-nowrap ${
               outOfStock
                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                : 'bg-teal-50 text-teal-800 hover:bg-teal-700 hover:text-white border border-teal-200 cursor-pointer'
+                : inCartQty > 0
+                  ? 'bg-teal-700 text-white hover:bg-teal-800 cursor-pointer'
+                  : 'bg-teal-50 text-teal-800 hover:bg-teal-700 hover:text-white border border-teal-200 cursor-pointer'
             }"
           >
-            ${outOfStock ? 'Habis' : '+ Keranjang'}
+            ${outOfStock ? 'Habis' : inCartQty > 0 ? `+ Tambah (${inCartQty})` : '+ Keranjang'}
           </button>
         </div>
       `;
@@ -88,6 +138,7 @@ export function addToCart(ctx, productId) {
   }
 
   posCart[productId] = currentQty + 1;
+  renderPOSProducts(ctx);
   renderCart(ctx);
 }
 
@@ -105,6 +156,7 @@ export function updateCartQty(ctx, productId, delta) {
   } else {
     posCart[productId] = nextQty;
   }
+  renderPOSProducts(ctx);
   renderCart(ctx);
 }
 
@@ -113,6 +165,7 @@ export function clearCart(ctx) {
   Object.keys(posCart).forEach((k) => delete posCart[k]);
   const discountInput = document.getElementById('pos-discount-input');
   if (discountInput instanceof HTMLInputElement) discountInput.value = '0';
+  renderPOSProducts(ctx);
   renderCart(ctx);
 }
 
@@ -131,6 +184,14 @@ export function renderCart(ctx) {
 
   const discountPercent = parseInt(discountInput instanceof HTMLInputElement ? discountInput.value : '0', 10) || 0;
   if (discountLabel) discountLabel.textContent = `${discountPercent}%`;
+
+  document.querySelectorAll('#pos-discount-presets [data-discount]').forEach((btn) => {
+    const val = parseInt(btn.getAttribute('data-discount') || '0', 10);
+    btn.className =
+      val === discountPercent
+        ? 'py-1 rounded-lg text-[11px] font-bold bg-teal-700 text-white transition cursor-pointer'
+        : 'py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer';
+  });
 
   const entries = Object.entries(posCart);
   if (entries.length === 0) {
@@ -153,39 +214,44 @@ export function renderCart(ctx) {
     .map(([id, qty]) => {
       const prod = appState.products.find((p) => p.id === id);
       if (!prod) return '';
-      subtotal += prod.sellPrice * qty;
+      const lineTotal = prod.sellPrice * qty;
+      subtotal += lineTotal;
       totalCost += prod.costPrice * qty;
       const fallbackImg = getCategoryFallbackImage(prod.category);
       const imgSrc = prod.imageUrl || fallbackImg;
 
       return `
-        <div class="flex items-center justify-between gap-2.5 text-sm bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+        <div class="flex items-center justify-between gap-2.5 text-sm bg-slate-50 p-2.5 rounded-xl">
           <img
             src="${escapeHTML(imgSrc)}"
             alt="${escapeHTML(prod.name)}"
             referrerpolicy="no-referrer"
             data-fallback="${escapeHTML(fallbackImg)}"
-            class="cart-item-img w-11 h-11 rounded-lg object-cover border border-slate-200 bg-white shrink-0"
+            class="cart-item-img w-10 h-10 rounded-lg object-cover border border-slate-200 bg-white shrink-0"
           />
           <div class="min-w-0 flex-1">
-            <div class="font-semibold text-slate-900 truncate">${escapeHTML(prod.name)}</div>
-            <div class="text-xs font-mono tabular-nums text-slate-500">${formatRupiah(prod.sellPrice)} &times; ${qty}</div>
+            <div class="font-semibold text-slate-900 text-xs sm:text-sm truncate">${escapeHTML(prod.name)}</div>
+            <div class="text-[11px] font-mono tabular-nums text-slate-500">
+              ${formatRupiah(prod.sellPrice)} &times; ${qty} = <strong class="text-slate-800">${formatRupiah(
+        lineTotal
+      )}</strong>
+            </div>
           </div>
-          <div class="flex items-center gap-1.5 shrink-0">
+          <div class="flex items-center gap-1 shrink-0">
             <button
               type="button"
               data-action="cart-dec"
               data-id="${escapeHTML(id)}"
               aria-label="Kurangi ${escapeHTML(prod.name)}"
-              class="w-8 h-8 rounded-lg bg-white border border-slate-200 font-bold text-slate-700 hover:bg-slate-100 cursor-pointer"
-            >-</button>
-            <span class="w-6 text-center font-bold font-mono tabular-nums text-xs">${qty}</span>
+              class="w-7 h-7 rounded-lg bg-white border border-slate-200 font-bold text-slate-700 hover:bg-slate-100 cursor-pointer"
+            >&minus;</button>
+            <span class="w-5 text-center font-bold font-mono tabular-nums text-xs">${qty}</span>
             <button
               type="button"
               data-action="cart-inc"
               data-id="${escapeHTML(id)}"
               aria-label="Tambah ${escapeHTML(prod.name)}"
-              class="w-8 h-8 rounded-lg bg-white border border-slate-200 font-bold text-slate-700 hover:bg-slate-100 cursor-pointer"
+              class="w-7 h-7 rounded-lg bg-white border border-slate-200 font-bold text-slate-700 hover:bg-slate-100 cursor-pointer"
             >+</button>
           </div>
         </div>

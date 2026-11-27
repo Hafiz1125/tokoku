@@ -62,60 +62,86 @@
     <section
       id="auth-screen"
       aria-label="Halaman Login Pengguna"
-      class="min-h-screen w-full flex items-center justify-center px-4 py-10 sm:px-8"
+      class="min-h-screen w-full bg-slate-100/70 flex items-center justify-center px-4 py-8 sm:px-6 lg:px-8"
     >
-      <div class="max-w-5xl w-full grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
-        <!-- Panel Informasi Kiri -->
-        <div class="lg:col-span-6 space-y-6">
-          <div class="flex items-center gap-3">
-            <div
-              id="auth-brand-icon"
-              class="w-11 h-11 rounded-xl bg-teal-700 text-white flex items-center justify-center shrink-0"
-            ></div>
-            <div>
-              <span class="font-extrabold text-2xl tracking-tight text-slate-900 leading-none">
-                Toko<span class="text-teal-700">Ku</span>
-              </span>
-              <p class="text-xs text-slate-500 font-medium mt-0.5">Manajemen &amp; Edukasi Toko Kelontong</p>
+      <div
+        class="max-w-5xl w-full bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden grid grid-cols-1 lg:grid-cols-12 items-stretch"
+      >
+        <!-- Panel Brand & Ringkasan Kiri -->
+        <div
+          class="lg:col-span-5 bg-teal-900 text-white p-7 sm:p-9 lg:p-10 flex flex-col justify-between gap-8"
+        >
+          <div class="space-y-6">
+            <div class="flex items-center gap-3">
+              <div
+                id="auth-brand-icon"
+                class="w-11 h-11 rounded-xl bg-white/15 border border-white/15 text-white flex items-center justify-center shrink-0"
+              ></div>
+              <div>
+                <span class="font-extrabold text-2xl tracking-tight text-white leading-none">
+                  Toko<span class="text-teal-200">Ku</span>
+                </span>
+                <p class="text-xs text-teal-100/80 font-medium mt-0.5">Kasir &amp; Pembukuan Toko</p>
+              </div>
+            </div>
+
+            <div class="space-y-3">
+              <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white text-balance leading-tight">
+                Kelola Toko Lebih Rapi dalam Satu Tempat
+              </h1>
+              <p class="text-sm text-teal-100/85 leading-relaxed">
+                Catat barang dagangan, pantau stok harian, layani kasir, hingga lihat rekap keuntungan bulanan dan
+                tahunan dengan praktis.
+              </p>
             </div>
           </div>
 
-          <div class="space-y-3">
-            <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 text-balance leading-tight">
-              Kelola Stok, Margin, dan Kasir Toko dalam Satu Tempat
-            </h1>
-            <p class="text-sm sm:text-base text-slate-600 leading-relaxed max-w-lg">
-              Masuk ke akun usaha Anda untuk mencatat penjualan harian, menghitung titik pesan ulang stok, dan
-              memantau keuntungan toko secara terpisah per akun.
+          <div class="space-y-4 pt-6 border-t border-white/15">
+            <div class="space-y-3.5 text-xs sm:text-sm text-teal-50/90">
+              <div class="flex items-start gap-3">
+                <span data-icon="tag" class="text-teal-200 mt-0.5 shrink-0"></span>
+                <div>
+                  <p class="font-semibold text-white">Produk &amp; Harga Jual</p>
+                  <p class="text-xs text-teal-100/75 mt-0.5">Atur modal, harga jual, dan estimasi untung per item.</p>
+                </div>
+              </div>
+              <div class="flex items-start gap-3">
+                <span data-icon="package" class="text-teal-200 mt-0.5 shrink-0"></span>
+                <div>
+                  <p class="font-semibold text-white">Stok &amp; Restock Praktis</p>
+                  <p class="text-xs text-teal-100/75 mt-0.5">Pantau barang menipis, belanja kulakan, dan penyesuaian cepat.</p>
+                </div>
+              </div>
+              <div class="flex items-start gap-3">
+                <span data-icon="file-spreadsheet" class="text-teal-200 mt-0.5 shrink-0"></span>
+                <div>
+                  <p class="font-semibold text-white">Kasir, Harian &amp; Tahunan</p>
+                  <p class="text-xs text-teal-100/75 mt-0.5">Rekap omzet serta keuntungan otomatis per hari, bulan, dan tahun.</p>
+                </div>
+              </div>
+            </div>
+
+            <p class="pt-3 border-t border-white/10 text-[11px] text-teal-100/70 flex items-center gap-2">
+              <span data-icon="shield-check" data-icon-class="w-3.5 h-3.5" class="text-teal-200 shrink-0"></span>
+              <span>Data usaha tersimpan terpisah dan aman untuk setiap akun toko.</span>
             </p>
-          </div>
-
-          <div class="pt-4 border-t border-slate-200 space-y-3 text-sm text-slate-700">
-            <div class="flex items-start gap-3">
-              <span data-icon="tag" class="text-teal-700 mt-0.5 shrink-0"></span>
-              <span><strong>Analisis Margin &amp; Harga</strong> &middot; Hitung laba kotor dan lindungi modal saat promo.</span>
-            </div>
-            <div class="flex items-start gap-3">
-              <span data-icon="truck" class="text-teal-700 mt-0.5 shrink-0"></span>
-              <span><strong>Kontrol Stok Praktis</strong> &middot; Deteksi kapan harus restock sebelum rak kosong.</span>
-            </div>
-            <div class="flex items-start gap-3">
-              <span data-icon="file-spreadsheet" class="text-teal-700 mt-0.5 shrink-0"></span>
-              <span><strong>Kasir POS &amp; Tutup Toko</strong> &middot; Rekap kas harian otomatis dan ekspor CSV.</span>
-            </div>
           </div>
         </div>
 
         <!-- Panel Formulir Kanan -->
-        <div class="lg:col-span-6">
-          <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8">
+        <div class="lg:col-span-7 bg-white p-6 sm:p-10 lg:p-12 flex flex-col justify-center">
+          <div class="w-full max-w-md mx-auto">
             <!-- Segmented Switch Masuk / Daftar -->
-            <div class="flex items-center gap-1 p-1 bg-slate-100 rounded-xl mb-6" role="tablist" aria-label="Mode Autentikasi">
+            <div
+              class="grid grid-cols-2 items-center gap-1 p-1 bg-slate-100 rounded-xl mb-6"
+              role="tablist"
+              aria-label="Mode Autentikasi"
+            >
               <button
                 type="button"
                 id="auth-tab-login"
                 role="tab"
-                class="flex-1 py-2 px-3 min-h-[40px] rounded-lg text-xs sm:text-sm font-bold bg-white text-slate-900 shadow-xs transition cursor-pointer"
+                class="py-2.5 px-3 min-h-[40px] rounded-lg text-xs sm:text-sm font-bold bg-white text-slate-900 shadow-xs transition cursor-pointer"
               >
                 Masuk
               </button>
@@ -123,29 +149,38 @@
                 type="button"
                 id="auth-tab-register"
                 role="tab"
-                class="flex-1 py-2 px-3 min-h-[40px] rounded-lg text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition cursor-pointer"
+                class="py-2.5 px-3 min-h-[40px] rounded-lg text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition cursor-pointer"
               >
                 Daftar Akun
               </button>
             </div>
 
+            <div class="mb-5">
+              <h2 id="auth-form-title" class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+                Masuk ke Akun Toko
+              </h2>
+              <p id="auth-form-subtitle" class="text-xs sm:text-sm text-slate-500 mt-1">
+                Masukkan username dan kata sandi untuk membuka pembukuan toko Anda.
+              </p>
+            </div>
+
             <div
               id="auth-firstrun-note"
-              class="hidden mb-4 p-3 rounded-xl bg-teal-50 border border-teal-200 text-xs text-teal-950 leading-relaxed"
+              class="hidden mb-5 px-3.5 py-2.5 rounded-r-xl border-l-4 border-teal-600 bg-slate-50 text-xs text-slate-700 leading-relaxed"
             >
-              Belum ada akun terdaftar. Buat akun usaha pertama Anda di bawah ini untuk mulai mengelola toko.
+              Belum ada akun terdaftar. Buat akun toko pertama Anda di bawah ini untuk mulai mencatat transaksi.
             </div>
 
             <div
               id="auth-error-box"
               role="alert"
-              class="hidden mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs font-medium text-rose-800"
+              class="hidden mb-5 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs font-medium text-rose-800"
             ></div>
 
             <form id="auth-form" class="space-y-4">
               <div id="auth-register-fields" class="hidden space-y-4">
                 <div>
-                  <label for="auth-store-name" class="block text-xs font-bold text-slate-700 mb-1">
+                  <label for="auth-store-name" class="block text-xs font-bold text-slate-700 mb-1.5">
                     Nama Usaha / Toko
                   </label>
                   <input
@@ -153,11 +188,11 @@
                     id="auth-store-name"
                     maxlength="48"
                     placeholder="Contoh: Toko Berkah Jaya"
-                    class="w-full px-3.5 py-2.5 min-h-[44px] border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                    class="w-full px-3.5 py-2.5 min-h-[44px] bg-slate-50/70 focus:bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 transition"
                   />
                 </div>
                 <div>
-                  <label for="auth-owner-name" class="block text-xs font-bold text-slate-700 mb-1">
+                  <label for="auth-owner-name" class="block text-xs font-bold text-slate-700 mb-1.5">
                     Nama Pemilik / Pengelola
                   </label>
                   <input
@@ -165,13 +200,13 @@
                     id="auth-owner-name"
                     maxlength="48"
                     placeholder="Contoh: Budi Santoso"
-                    class="w-full px-3.5 py-2.5 min-h-[44px] border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                    class="w-full px-3.5 py-2.5 min-h-[44px] bg-slate-50/70 focus:bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 transition"
                   />
                 </div>
               </div>
 
               <div>
-                <label for="auth-username" class="block text-xs font-bold text-slate-700 mb-1">
+                <label for="auth-username" class="block text-xs font-bold text-slate-700 mb-1.5">
                   Username
                 </label>
                 <input
@@ -181,12 +216,12 @@
                   autocomplete="username"
                   maxlength="32"
                   placeholder="Contoh: budi.warung"
-                  class="w-full px-3.5 py-2.5 min-h-[44px] border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                  class="w-full px-3.5 py-2.5 min-h-[44px] bg-slate-50/70 focus:bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 transition"
                 />
               </div>
 
               <div>
-                <label for="auth-password" class="block text-xs font-bold text-slate-700 mb-1">
+                <label for="auth-password" class="block text-xs font-bold text-slate-700 mb-1.5">
                   Kata Sandi
                 </label>
                 <div class="relative">
@@ -198,13 +233,13 @@
                     minlength="6"
                     maxlength="128"
                     placeholder="Minimal 6 karakter"
-                    class="w-full pl-3.5 pr-11 py-2.5 min-h-[44px] border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                    class="w-full pl-3.5 pr-11 py-2.5 min-h-[44px] bg-slate-50/70 focus:bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 transition"
                   />
                   <button
                     type="button"
                     id="auth-toggle-password"
                     aria-label="Tampilkan atau sembunyikan kata sandi"
-                    class="absolute right-2 top-1/2 -translate-y-1/2 min-w-[36px] min-h-[36px] inline-flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition cursor-pointer"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 min-w-[36px] min-h-[36px] inline-flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200/70 transition cursor-pointer"
                   >
                     <span data-eye-icon data-icon="eye" class="shrink-0"></span>
                   </button>
@@ -214,7 +249,7 @@
               <button
                 type="submit"
                 id="auth-submit-btn"
-                class="w-full py-3 px-4 min-h-[44px] rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-sm font-bold transition cursor-pointer"
+                class="w-full mt-2 py-3 px-4 min-h-[46px] rounded-xl bg-teal-700 hover:bg-teal-800 active:bg-teal-900 text-white text-sm font-bold transition cursor-pointer"
               >
                 Masuk ke TokoKu
               </button>
@@ -451,89 +486,92 @@
       <!-- Container Dinamis Halaman -->
       <div class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-6">
         <!-- TAB 1: PRODUK -->
-        <section id="tab-produk" class="tab-panel space-y-6">
-          <div
-            class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200"
-          >
-            <div class="space-y-1">
-              <p class="text-xs font-semibold text-teal-700">Konsep Ilmiah &middot; Gross Profit Margin</p>
-              <h3 class="text-xl font-bold text-slate-900 text-balance">Katalog Produk &amp; Analisis Margin</h3>
-              <p class="text-sm text-slate-600 max-w-2xl">
-                Kelola daftar barang kelontong dan pastikan harga jual menghasilkan margin laba yang sehat.
-              </p>
+        <section id="tab-produk" class="tab-panel space-y-5">
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 class="text-xl font-bold text-slate-900">Katalog Produk</h3>
+                <p class="text-sm text-slate-500 mt-0.5">
+                  Daftar barang toko, harga modal, harga jual, dan estimasi untung per unit.
+                </p>
+              </div>
+              <button
+                type="button"
+                id="add-product-btn"
+                class="inline-flex items-center justify-center gap-2 bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-4 py-2.5 min-h-[42px] rounded-xl transition shrink-0 whitespace-nowrap cursor-pointer"
+              >
+                <span data-icon="plus-circle" class="shrink-0"></span>
+                <span>Tambah Produk</span>
+              </button>
             </div>
-            <button
-              type="button"
-              id="add-product-btn"
-              class="inline-flex items-center justify-center gap-2 bg-teal-700 hover:bg-teal-800 text-white font-semibold px-4 py-2.5 min-h-[44px] rounded-xl transition shrink-0 whitespace-nowrap cursor-pointer"
-            >
-              <span data-icon="plus-circle" class="shrink-0"></span>
-              <span>Tambah Produk Baru</span>
-            </button>
-          </div>
 
-          <!-- Filter & Pencarian Produk -->
-          <div class="flex flex-col sm:flex-row gap-3">
-            <div class="relative flex-1">
+            <!-- Filter & Pencarian Produk -->
+            <div class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center gap-3">
+              <div class="relative flex-1">
+                <span
+                  data-icon="search"
+                  class="text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                ></span>
+                <input
+                  type="text"
+                  id="search-product-input"
+                  aria-label="Cari nama produk"
+                  placeholder="Cari nama produk..."
+                  class="w-full pl-10 pr-4 py-2 min-h-[42px] bg-slate-50 focus:bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 transition"
+                />
+              </div>
+              <select
+                id="filter-category-select"
+                aria-label="Filter kategori produk"
+                class="px-3.5 py-2 min-h-[42px] bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-600 cursor-pointer"
+              >
+                <option value="ALL">Semua Kategori</option>
+                <option value="Sembako">Sembako</option>
+                <option value="Minuman">Minuman</option>
+                <option value="Makanan Ringan">Makanan Ringan</option>
+                <option value="Kebersihan">Kebersihan &amp; Rumah Tangga</option>
+              </select>
               <span
-                data-icon="search"
-                class="text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
-              ></span>
-              <input
-                type="text"
-                id="search-product-input"
-                aria-label="Cari nama produk kelontong"
-                placeholder="Cari nama produk kelontong..."
-                class="w-full pl-10 pr-4 py-2.5 min-h-[44px] bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
-              />
+                id="produk-count-label"
+                class="text-xs font-mono tabular-nums font-semibold text-slate-500 whitespace-nowrap sm:px-1"
+              >
+                0 produk
+              </span>
             </div>
-            <select
-              id="filter-category-select"
-              aria-label="Filter kategori produk"
-              class="px-4 py-2.5 min-h-[44px] bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-600"
-            >
-              <option value="ALL">Semua Kategori</option>
-              <option value="Sembako">Sembako</option>
-              <option value="Minuman">Minuman</option>
-              <option value="Makanan Ringan">Makanan Ringan</option>
-              <option value="Kebersihan">Kebersihan &amp; Rumah Tangga</option>
-            </select>
           </div>
 
           <!-- Grid Kartu Produk -->
-          <div id="products-cards-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+          <div id="products-cards-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
         </section>
 
         <!-- TAB 2: KELOLA STOK & RESTOCK (GABUNGAN) -->
-        <section id="tab-stock" class="tab-panel hidden space-y-6">
+        <section id="tab-stock" class="tab-panel hidden space-y-5">
           <!-- Ringkasan & Filter Cepat Stok -->
           <div class="bg-white p-5 rounded-2xl border border-slate-200 space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div>
-                <h3 class="text-xl font-bold text-slate-900">Kelola Stok &amp; Restock Barang</h3>
-                <p class="text-sm text-slate-600 mt-0.5">
-                  Pantau sisa stok, ubah jumlah cepat (<span class="font-bold text-slate-800">&minus; / + / Atur</span>), atau catat belanja barang masuk dalam satu tempat.
+                <h3 class="text-xl font-bold text-slate-900">Stok &amp; Restock Barang</h3>
+                <p class="text-sm text-slate-500 mt-0.5">
+                  Pantau sisa stok, ubah jumlah cepat (<span class="font-semibold text-slate-700">&minus; / + / Atur</span>), atau catat belanja stok masuk.
                 </p>
               </div>
-              <div class="flex flex-wrap items-center gap-4 sm:gap-5">
-                <div>
-                  <div class="text-[11px] font-medium text-slate-500">Total Barang</div>
-                  <div id="stock-summary-count" class="text-sm sm:text-base font-extrabold font-mono tabular-nums text-slate-900">0 item</div>
+              <div class="grid grid-cols-3 divide-x divide-slate-200 bg-slate-50 rounded-xl py-2.5 px-3 shrink-0">
+                <div class="pr-3 sm:px-4">
+                  <div class="text-[11px] font-medium text-slate-500 whitespace-nowrap">Total Barang</div>
+                  <div id="stock-summary-count" class="text-sm font-extrabold font-mono tabular-nums text-slate-900 mt-0.5">0 item</div>
                 </div>
-                <div class="h-8 w-px bg-slate-200" aria-hidden="true"></div>
-                <div>
-                  <div class="text-[11px] font-medium text-slate-500">Perlu Restock</div>
-                  <div id="stock-summary-low" class="text-sm sm:text-base font-extrabold font-mono tabular-nums text-amber-700">0 item</div>
+                <div class="px-3 sm:px-4">
+                  <div class="text-[11px] font-medium text-slate-500 whitespace-nowrap">Perlu Restock</div>
+                  <div id="stock-summary-low" class="text-sm font-extrabold font-mono tabular-nums text-amber-700 mt-0.5">0 item</div>
                 </div>
-                <div class="h-8 w-px bg-slate-200" aria-hidden="true"></div>
-                <div>
-                  <div class="text-[11px] font-medium text-slate-500">Total Nilai Modal Stok</div>
-                  <div id="stock-summary-asset" class="text-sm sm:text-base font-extrabold font-mono tabular-nums text-teal-700">Rp 0</div>
+                <div class="pl-3 sm:px-4">
+                  <div class="text-[11px] font-medium text-slate-500 whitespace-nowrap">Modal Stok</div>
+                  <div id="stock-summary-asset" class="text-sm font-extrabold font-mono tabular-nums text-teal-700 mt-0.5 whitespace-nowrap">Rp 0</div>
                 </div>
               </div>
             </div>
 
-            <div class="pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center gap-3">
               <div class="relative flex-1">
                 <span
                   data-icon="search"
@@ -543,21 +581,19 @@
                 <input
                   type="search"
                   id="stock-search-input"
-                  placeholder="Cari nama barang atau kategori untuk atur stok / restock..."
-                  class="w-full pl-10 pr-4 py-2 min-h-[42px] bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-600"
+                  placeholder="Cari nama barang atau kategori..."
+                  class="w-full pl-10 pr-4 py-2 min-h-[42px] bg-slate-50 focus:bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 transition"
                 />
               </div>
-              <div class="flex items-center gap-2 shrink-0">
-                <select
-                  id="stock-status-filter"
-                  aria-label="Filter status stok barang"
-                  class="px-3.5 py-2 min-h-[42px] bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-600 cursor-pointer"
-                >
-                  <option value="ALL">Semua Status Stok</option>
-                  <option value="LOW">Perlu Restock / Habis</option>
-                  <option value="SAFE">Stok Aman</option>
-                </select>
-              </div>
+              <select
+                id="stock-status-filter"
+                aria-label="Filter status stok barang"
+                class="px-3.5 py-2 min-h-[42px] bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-600 cursor-pointer shrink-0"
+              >
+                <option value="ALL">Semua Status Stok</option>
+                <option value="LOW">Perlu Restock / Habis</option>
+                <option value="SAFE">Stok Aman</option>
+              </select>
             </div>
           </div>
 
@@ -566,32 +602,54 @@
         </section>
 
         <!-- TAB 3: HARGA & KASIR POS -->
-        <section id="tab-harga" class="tab-panel hidden space-y-6">
-          <div class="bg-white p-5 rounded-2xl border border-slate-200 space-y-1">
-            <p class="text-xs font-semibold text-teal-700">
-              Konsep Ilmiah &middot; Break-Even Pricing &amp; Margin Protection
-            </p>
-            <h3 class="text-xl font-bold text-slate-900 text-balance">Simulasi Harga Jual, Diskon &amp; Kasir (POS)</h3>
-            <p class="text-sm text-slate-600 max-w-3xl">
-              Uji strategi harga dan simulasi penjualan pelanggan. Sistem otomatis mendeteksi jika diskon di bawah harga modal beli.
-            </p>
+        <section id="tab-harga" class="tab-panel hidden space-y-5">
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 class="text-xl font-bold text-slate-900">Kasir POS &amp; Simulasi Harga</h3>
+              <p class="text-sm text-slate-500 mt-0.5">
+                Pilih barang ke keranjang, atur diskon promo, lalu selesaikan pembayaran pelanggan.
+              </p>
+            </div>
+            <span id="pos-shift-hint" class="text-xs font-semibold text-slate-500 shrink-0"></span>
           </div>
 
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
             <!-- Kolom Kiri: Pilih Barang Dijual -->
-            <div class="lg:col-span-2 space-y-4">
-              <div class="flex items-center justify-between gap-2">
-                <h4 class="font-bold text-slate-800">Pilih Barang untuk Transaksi Pelanggan</h4>
-                <span id="pos-shift-hint" class="text-xs font-medium text-slate-500"></span>
+            <div class="lg:col-span-7 xl:col-span-8 space-y-4">
+              <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div class="relative flex-1">
+                  <span
+                    data-icon="search"
+                    data-icon-class="w-4 h-4 text-slate-400"
+                    class="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                  ></span>
+                  <input
+                    type="search"
+                    id="pos-search-input"
+                    aria-label="Cari barang di kasir"
+                    placeholder="Cari nama barang di kasir..."
+                    class="w-full pl-10 pr-4 py-2 min-h-[42px] bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 transition"
+                  />
+                </div>
+                <select
+                  id="pos-category-filter"
+                  aria-label="Filter kategori barang di kasir"
+                  class="px-3.5 py-2 min-h-[42px] bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-600 cursor-pointer shrink-0"
+                >
+                  <option value="ALL">Semua Kategori</option>
+                </select>
+                <span id="pos-catalog-count" class="text-xs font-mono tabular-nums font-semibold text-slate-500 whitespace-nowrap">
+                  0 barang
+                </span>
               </div>
               <div id="pos-products-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
             </div>
 
             <!-- Kolom Kanan: Keranjang Kasir -->
-            <div class="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between lg:sticky lg:top-24">
+            <div class="lg:col-span-5 xl:col-span-4 bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between lg:sticky lg:top-24">
               <div>
                 <div class="flex items-center justify-between pb-3 border-b border-slate-200">
-                  <h4 class="font-bold text-slate-900">Struk Simulasi Kasir</h4>
+                  <h4 class="font-bold text-slate-900">Keranjang Kasir</h4>
                   <button
                     type="button"
                     id="pos-clear-cart-btn"
@@ -601,15 +659,15 @@
                   </button>
                 </div>
 
-                <div id="pos-cart-items" class="py-4 space-y-2.5 max-h-64 overflow-y-auto">
+                <div id="pos-cart-items" class="py-3 space-y-2 max-h-64 overflow-y-auto">
                   <p class="text-sm text-slate-500 text-center py-6">Belum ada barang di keranjang</p>
                 </div>
               </div>
 
-              <div class="border-t border-slate-200 pt-4 space-y-3">
-                <div>
-                  <div class="flex justify-between text-xs font-semibold text-slate-700 mb-1.5">
-                    <label for="pos-discount-input">Simulasi Diskon Promo (%)</label>
+              <div class="border-t border-slate-200 pt-4 space-y-3.5">
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between text-xs font-semibold text-slate-700">
+                    <label for="pos-discount-input">Diskon Promo</label>
                     <span id="pos-discount-label" class="font-mono tabular-nums text-teal-700 font-bold">0%</span>
                   </div>
                   <input
@@ -620,6 +678,12 @@
                     value="0"
                     class="w-full accent-teal-700 cursor-pointer"
                   />
+                  <div class="grid grid-cols-4 gap-1.5" id="pos-discount-presets">
+                    <button type="button" data-action="set-pos-discount" data-discount="0" class="py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">0%</button>
+                    <button type="button" data-action="set-pos-discount" data-discount="5" class="py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">5%</button>
+                    <button type="button" data-action="set-pos-discount" data-discount="10" class="py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">10%</button>
+                    <button type="button" data-action="set-pos-discount" data-discount="20" class="py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">20%</button>
+                  </div>
                 </div>
 
                 <div>
@@ -634,7 +698,7 @@
                     <label class="cursor-pointer">
                       <input type="radio" name="pos-payment-method" value="NON_CASH" class="peer sr-only" />
                       <span class="flex items-center justify-center py-2 px-3 min-h-[40px] rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 peer-checked:border-sky-700 peer-checked:bg-sky-50 peer-checked:text-sky-800 transition">
-                        Non-Cash (QRIS/Tf)
+                        Non-Cash (QRIS)
                       </span>
                     </label>
                   </div>
@@ -646,12 +710,12 @@
                   class="hidden p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900 font-medium"
                 ></div>
 
-                <div class="space-y-1.5 text-sm bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                  <div class="flex justify-between text-slate-600">
-                    <span>Subtotal Harga Normal</span>
+                <div class="space-y-1.5 text-sm bg-slate-50 p-3.5 rounded-xl">
+                  <div class="flex justify-between text-slate-600 text-xs">
+                    <span>Subtotal Normal</span>
                     <span id="pos-subtotal" class="font-mono tabular-nums">Rp 0</span>
                   </div>
-                  <div class="flex justify-between text-rose-700">
+                  <div class="flex justify-between text-rose-700 text-xs">
                     <span>Potongan Diskon</span>
                     <span id="pos-discount-amount" class="font-mono tabular-nums">- Rp 0</span>
                   </div>
@@ -659,8 +723,8 @@
                     <span>Total Bayar</span>
                     <span id="pos-total" class="font-mono tabular-nums">Rp 0</span>
                   </div>
-                  <div class="flex justify-between text-xs font-semibold pt-1">
-                    <span class="text-slate-500">Estimasi Laba Bersih:</span>
+                  <div class="flex justify-between text-xs font-semibold pt-0.5">
+                    <span class="text-slate-500">Estimasi Untung:</span>
                     <span id="pos-profit-estimate" class="font-mono tabular-nums text-emerald-700">Rp 0</span>
                   </div>
                 </div>
@@ -668,10 +732,10 @@
                 <button
                   type="button"
                   id="pos-checkout-btn"
-                  class="w-full py-3 px-4 min-h-[44px] bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
+                  class="w-full py-3 px-4 min-h-[44px] bg-teal-700 hover:bg-teal-800 text-white text-sm font-bold rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <span data-icon="check-circle" class="shrink-0"></span>
-                  <span>Selesaikan Penjualan (+15 XP)</span>
+                  <span>Simpan &amp; Selesaikan Transaksi</span>
                 </button>
               </div>
             </div>
@@ -990,27 +1054,22 @@
         </section>
 
         <!-- TAB 5: REKAP BULANAN & TAHUNAN -->
-        <section id="tab-tahunan" class="tab-panel hidden space-y-6">
+        <section id="tab-tahunan" class="tab-panel hidden space-y-5">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200">
-            <div class="space-y-1">
-              <p class="text-xs font-semibold text-teal-700">
-                Rekap Periode &middot; Bulanan &amp; Tahunan
-              </p>
-              <h3 class="text-xl font-bold text-slate-900 text-balance">
-                Rekap Keuangan Bulanan &amp; Tahunan
-              </h3>
-              <p class="text-sm text-slate-600 max-w-2xl">
-                Pantau total pemasukan bersih, omzet kasir, pengeluaran, dan belanja restock terpisah dari laporan harian.
+            <div>
+              <h3 class="text-xl font-bold text-slate-900">Rekap Bulanan &amp; Tahunan</h3>
+              <p class="text-sm text-slate-500 mt-0.5">
+                Ringkasan omzet kasir, uang keluar, belanja restock, dan pemasukan bersih per bulan &amp; tahun.
               </p>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
+            <div class="flex items-center gap-2.5 shrink-0">
               <label for="annual-year-filter" class="text-xs font-semibold text-slate-600 whitespace-nowrap">
-                Pilih Tahun:
+                Tahun:
               </label>
               <select
                 id="annual-year-filter"
                 aria-label="Filter tahun rekap keuangan"
-                class="px-3.5 py-2.5 min-h-[42px] bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-600 cursor-pointer"
+                class="px-3.5 py-2 min-h-[42px] bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-600 cursor-pointer"
               >
                 <option value="2026">Tahun 2026</option>
               </select>

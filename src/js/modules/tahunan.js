@@ -253,7 +253,7 @@ export function renderAnnualReport(ctx) {
                 data-day="${escapeHTML(targetDayVal)}"
                 class="px-3 py-1.5 min-h-[34px] rounded-lg text-xs font-semibold bg-slate-100 hover:bg-teal-700 hover:text-white text-slate-700 transition cursor-pointer whitespace-nowrap"
               >
-                Cek Harian
+                Lihat Harian
               </button>
             </td>
           </tr>
@@ -304,7 +304,7 @@ export function renderAnnualReport(ctx) {
         const isCurrentFilter = selectedYear === y.year;
         return `
           <tr class="hover:bg-slate-50 transition ${isCurrentFilter ? 'bg-teal-50/50' : ''}">
-            <td class="py-3.5 px-4 font-bold text-slate-900 font-mono tabular-nums">
+            <td class="py-3.5 px-4 font-bold text-slate-900 font-mono tabular-nums whitespace-nowrap">
               <button
                 type="button"
                 data-action="select-annual-year"
@@ -313,6 +313,7 @@ export function renderAnnualReport(ctx) {
               >
                 Tahun ${escapeHTML(y.year)}
               </button>
+              ${isCurrentFilter ? '<span class="ml-1.5 text-xs font-semibold text-teal-700">&middot; Dipilih</span>' : ''}
             </td>
             <td class="py-3.5 px-4 text-center font-mono tabular-nums text-slate-600">${y.days.size} hr</td>
             <td class="py-3.5 px-4 text-right font-mono tabular-nums text-slate-800 whitespace-nowrap">${formatRupiah(

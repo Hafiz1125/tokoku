@@ -396,6 +396,18 @@ function wireStaticListeners() {
     if (action === 'cart-inc') updateCartQty(ctx, id, 1);
   });
 
+  document.getElementById('pos-search-input')?.addEventListener('input', () => renderPOSProducts(ctx));
+  document.getElementById('pos-category-filter')?.addEventListener('change', () => renderPOSProducts(ctx));
+  document.getElementById('pos-discount-presets')?.addEventListener('click', (event) => {
+    const target = event.target instanceof Element ? event.target.closest('[data-action="set-pos-discount"]') : null;
+    if (!target) return;
+    const discountVal = target.getAttribute('data-discount') || '0';
+    const discountInput = document.getElementById('pos-discount-input');
+    if (discountInput instanceof HTMLInputElement) {
+      discountInput.value = discountVal;
+    }
+    renderCart(ctx);
+  });
   document.getElementById('pos-clear-cart-btn')?.addEventListener('click', () => clearCart(ctx));
   document.getElementById('pos-discount-input')?.addEventListener('input', () => renderCart(ctx));
   document.getElementById('pos-checkout-btn')?.addEventListener('click', () => checkoutCart(ctx));
